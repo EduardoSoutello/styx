@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Music, Video, Camera, LayoutGrid, Settings, Play, Pause, SkipForward, SkipBack, Search, LogOut, Folder, FolderSymlink } from 'lucide-react'
+import { Music, Video, Camera, LayoutGrid, Settings, Play, Pause, SkipForward, SkipBack, Search, LogOut, Folder, FolderSymlink, Menu, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGoogleLogin, googleLogout, GoogleOAuthProvider } from '@react-oauth/google'
 import { listDriveFiles, getMediaStreamUrl, findFolder, createFolder } from './services/GoogleDriveService'
@@ -23,6 +23,14 @@ function StyxAppContent() {
   const [baseFolder, setBaseFolder] = useState({ id: 'root', name: 'Meu Drive' })
   const [isInitializing, setIsInitializing] = useState(false)
   const [streamId, setStreamId] = useState(null)
+  
+  // Mobile Sidebar State
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen)
+  const closeSidebar = () => {
+    if (window.innerWidth <= 768) setIsSidebarOpen(false)
+  }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -115,9 +123,32 @@ function StyxAppContent() {
     <div className="app-container">
       <div className="glow-background" />
       
-      <aside className="sidebar">
-        <div className="logo" onClick={() => window.location.href = window.location.origin} style={{ cursor: 'pointer' }}>
-          <h1 className="gradient-text" style={{ fontSize: '2rem', marginBottom: '1rem' }}>STYX</h1>
+      {/* Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          onClick={closeSidebar}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 900
+          }}
+        />
+      )}
+
+      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <div className="logo" onClick={() => { window.location.href = window.location.origin; closeSidebar(); }} style={{ cursor: 'pointer' }}>
+            <h1 className="gradient-text" style={{ fontSize: '2rem' }}>STYX</h1>
+          </div>
+          <button 
+            className="mobile-header" 
+            onClick={toggleSidebar} 
+            style={{ background: 'none', border: 'none', padding: '0.5rem' }}
+          >
+            <X size={24} />
+          </button>
         </div>
 
         <nav>
@@ -126,7 +157,7 @@ function StyxAppContent() {
               <li key={item.id}>
                 <button 
                   className={`nav-btn ${activeTab === item.id ? 'active' : ''}`}
-                  onClick={() => setActiveTab(item.id)}
+                  onClick={() => { setActiveTab(item.id); closeSidebar(); }}
                   style={{
                     width: '100%',
                     justifyContent: 'flex-start',
@@ -150,15 +181,15 @@ function StyxAppContent() {
                 <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>Pasta Base:</span>
               </div>
               <p style={{ fontSize: '0.8rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{baseFolder.name}</p>
-              <button onClick={() => handleFolderClick({ id: 'root', name: 'Meu Drive' })} style={{ width: '100%', fontSize: '0.7rem', padding: '0.4rem', marginTop: '0.5rem' }}>
+              <button onClick={() => { handleFolderClick({ id: 'root', name: 'Meu Drive' }); closeSidebar(); }} style={{ width: '100%', fontSize: '0.7rem', padding: '0.4rem', marginTop: '0.5rem' }}>
                 <FolderSymlink size={12} /> Alterar
               </button>
-              <button onClick={logout} style={{ width: '100%', justifyContent: 'flex-start', color: '#ff4444', background: 'none', border: 'none', marginTop: '1rem' }}>
+              <button onClick={() => { logout(); closeSidebar(); }} style={{ width: '100%', justifyContent: 'flex-start', color: '#ff4444', background: 'none', border: 'none', marginTop: '1rem' }}>
                 <LogOut size={16} /> <span style={{ fontSize: '0.75rem' }}>Sair da Conta</span>
               </button>
             </div>
           ) : (
-            <button className="primary" onClick={() => login()} style={{ width: '100%' }}>
+            <button className="primary" onClick={() => { login(); closeSidebar(); }} style={{ width: '100%' }}>
               Conectar Drive
             </button>
           )}
@@ -167,16 +198,25 @@ function StyxAppContent() {
 
       <main className="main-content">
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-          <div>
-            {baseFolder.id !== 'root' && (
-              <button onClick={() => handleFolderClick({ id: 'root', name: 'Meu Drive' })} style={{ background: 'none', border: 'none', opacity: 0.5, fontSize: '0.9rem', padding: 0 }}>
-                &larr; Voltar para a Raiz
-              </button>
-            )}
-            <h2 style={{ marginTop: '0.5rem' }}>{baseFolder.name}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <button 
+              className="mobile-header" 
+              onClick={toggleSidebar}
+              style={{ background: 'none', border: 'none', padding: '0.5rem' }}
+            >
+              <Menu size={24} />
+            </button>
+            <div>
+              {baseFolder.id !== 'root' && (
+                <button onClick={() => handleFolderClick({ id: 'root', name: 'Meu Drive' })} style={{ background: 'none', border: 'none', opacity: 0.5, fontSize: '0.9rem', padding: 0 }}>
+                  &larr; Voltar para a Raiz
+                </button>
+              )}
+              <h2 style={{ marginTop: '0.5rem' }}>{baseFolder.name}</h2>
+            </div>
           </div>
           
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <div className="desktop-only" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
              <div style={{ position: 'relative' }}>
                 <Search style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} size={18} />
                 <input type="text" placeholder="Buscar..." style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '0.5rem 1rem 0.5rem 3rem', color: 'white' }} />
