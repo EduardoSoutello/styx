@@ -3,11 +3,11 @@ import { Radio, Search, Globe, Play, Loader2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 const COUNTRIES = [
-  { name: 'Brasil', code: 'BR' },
-  { name: 'Russia', code: 'RU' },
-  { name: 'China', code: 'CN' },
-  { name: 'India', code: 'IN' },
-  { name: 'Mix Latino', tag: 'latino' }
+  { name: 'Brasil', code: 'BR', flag: 'https://flagcdn.com/w320/br.png' },
+  { name: 'Russia', code: 'RU', flag: 'https://flagcdn.com/w320/ru.png' },
+  { name: 'China', code: 'CN', flag: 'https://flagcdn.com/w320/cn.png' },
+  { name: 'India', code: 'IN', flag: 'https://flagcdn.com/w320/in.png' },
+  { name: 'Mix Latino', tag: 'latino', flag: 'https://images.unsplash.com/photo-1518107616385-ad30833dd607?q=80&w=320&auto=format&fit=crop' }
 ]
 
 const RADIO_API_BASE = 'https://at1.api.radio-browser.info/json'
@@ -27,7 +27,8 @@ function RadioTuner({ onStationClick }) {
     setLoading(true)
     setError(null)
     try {
-      let url = `${RADIO_API_BASE}/stations/search?limit=30&order=clickcount&reverse=true&hidebroken=true`
+      // is_https=true é CRUCIAL para funcionar no Vercel/HTTPS
+      let url = `${RADIO_API_BASE}/stations/search?limit=30&order=clickcount&reverse=true&hidebroken=true&is_https=true`
       
       if (search) {
         url += `&name=${encodeURIComponent(search)}`
@@ -68,7 +69,7 @@ function RadioTuner({ onStationClick }) {
           <Search style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} size={20} />
           <input 
             type="text" 
-            placeholder="Buscar estação por nome..." 
+            placeholder="Buscar por nome (Sintonizando HTTPS...)" 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{ 
@@ -82,20 +83,50 @@ function RadioTuner({ onStationClick }) {
           />
         </form>
 
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
           {COUNTRIES.map((country) => (
             <button
               key={country.name}
               onClick={() => { setActiveFilter(country); setSearchTerm(''); }}
               style={{
-                fontSize: '0.8rem',
-                padding: '0.5rem 1rem',
-                background: activeFilter.name === country.name ? 'var(--accent-primary)' : 'rgba(255,255,255,0.05)',
-                color: activeFilter.name === country.name ? 'black' : 'white',
-                border: 'none'
+                height: '80px',
+                position: 'relative',
+                overflow: 'hidden',
+                borderRadius: '12px',
+                border: activeFilter.name === country.name ? '2px solid var(--accent-primary)' : '1px solid var(--border-color)',
+                background: 'none',
+                padding: 0,
+                cursor: 'pointer'
               }}
             >
-              {country.name}
+              <img 
+                src={country.flag} 
+                alt="" 
+                style={{ 
+                  position: 'absolute', 
+                  inset: 0, 
+                  width: '100%', 
+                  height: '100%', 
+                  objectFit: 'cover', 
+                  opacity: activeFilter.name === country.name ? 0.6 : 0.3,
+                  transition: 'opacity 0.3s ease'
+                }} 
+              />
+              <div style={{ 
+                position: 'absolute', 
+                inset: 0, 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                background: 'rgba(0,0,0,0.4)',
+                fontWeight: 800,
+                fontSize: '0.9rem',
+                textTransform: 'uppercase',
+                letterSpacing: '1px',
+                color: activeFilter.name === country.name ? 'var(--accent-primary)' : 'white'
+              }}>
+                {country.name}
+              </div>
             </button>
           ))}
         </div>
@@ -103,8 +134,8 @@ function RadioTuner({ onStationClick }) {
 
       {loading ? (
         <div style={{ padding: '4rem', textAlign: 'center', opacity: 0.5 }}>
-          <Loader2 className="animate-spin" style={{ margin: '0 auto mb-2' }} />
-          <p>Sintonizando frequências...</p>
+          <Loader2 className="animate-spin" style={{ margin: '0 auto', marginBottom: '1rem' }} />
+          <p>Sintonizando estações seguras...</p>
         </div>
       ) : error ? (
         <div className="card" style={{ border: '1px solid #ff4444', color: '#ff4444', textAlign: 'center' }}>
@@ -150,13 +181,13 @@ function RadioTuner({ onStationClick }) {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <h4 style={{ fontSize: '0.9rem', marginBottom: '0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{station.name}</h4>
-                <p style={{ fontSize: '0.7rem', opacity: 0.5 }}>{station.country}</p>
+                <p style={{ fontSize: '0.7rem', opacity: 0.5 }}>{station.country} • {station.bitrate}kbps</p>
               </div>
               <Play size={16} color="var(--accent-primary)" />
             </motion.div>
           )) : (
             <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem', opacity: 0.5 }}>
-              Nenhuma estação encontrada nessa sintonia.
+              Nenhuma rádio HTTPS encontrada. Tente outro filtro.
             </div>
           )}
         </div>
