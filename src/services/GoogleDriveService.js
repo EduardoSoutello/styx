@@ -1,74 +1,41 @@
 const DRIVE_API_URL = 'https://www.googleapis.com/drive/v3';
 
-/**
- * Lists files and folders. 
- * If folderId is provided, lists content of that folder.
- */
 export const listDriveFiles = async (accessToken, folderId = 'root') => {
-  let query = `mimeType contains 'audio/' or mimeType contains 'video/' or mimeType = 'application/vnd.google-apps.folder'`;
-  if (folderId) {
-    query = `('${folderId}' in parents) and (${query}) and trashed = false`;
+  const query = `('${folderId}' in parents) and (mimeType contains 'audio/' or mimeType contains 'video/' or mimeType = 'application/vnd.google-apps.folder') and trashed = false`;
+  const url = `${DRIVE_API_URL}/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,thumbnailLink,size)&pageSize=100`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.error?.message || 'Falha ao listar arquivos');
   }
-  
-  const url = `${DRIVE_API_URL}/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,thumbnailLink,size,iconLink)&pageSize=100`;
-
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error.message || 'Failed to fetch Drive files');
-  }
-
-  const data = await response.json();
+  const data = await res.json();
   return data.files;
 };
 
-/**
- * Searches for a folder by name.
- */
-export const findFolder = async (accessToken, folderName) => {
-  const query = `name = '${folderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+export const findFolder = async (accessToken, name) => {
+  const query = `name = '${name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
   const url = `${DRIVE_API_URL}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) throw new Error('Search failed');
+  const data = await res.json();
+  return data.files[0] ?? null;
+};
 
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-    },
+export const createFolder = async (accessToken, name, parentId = 'root') => {
+  const res = await fetch(`${DRIVE_API_URL}/files`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] }),
   });
-
-  if (!response.ok) throw new Error('Search failed');
-  const data = await response.json();
-  return data.files.length > 0 ? data.files[0] : null;
+  if (!res.ok) throw new Error('Folder creation failed');
+  return res.json();
 };
 
 /**
- * Creates a folder with the given name.
+ * Returns the streaming URL synchronously (no async needed).
+ * Using access_token in query param is supported by Google APIs.
+ * This is called INSIDE a user gesture handler so audio.play() retains gesture context.
  */
-export const createFolder = async (accessToken, folderName, parentId = 'root') => {
-  const url = `${DRIVE_API_URL}/files`;
-  const body = {
-    name: folderName,
-    mimeType: 'application/vnd.google-apps.folder',
-    parents: [parentId]
-  };
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) throw new Error('Folder creation failed');
-  return await response.json();
-};
-
-export const getMediaStreamUrl = async (accessToken, fileId) => {
+export const getMediaStreamUrl = (accessToken, fileId) => {
   return `${DRIVE_API_URL}/files/${fileId}?alt=media&access_token=${accessToken}`;
 };
