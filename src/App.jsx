@@ -1,13 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
 import { Music, Video, Camera, LayoutGrid, Settings, Play, Pause, SkipForward, SkipBack, Search, LogOut, Folder, FolderSymlink } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useGoogleLogin, googleLogout } from '@react-oauth/google'
+import { useGoogleLogin, googleLogout, GoogleOAuthProvider } from '@react-oauth/google'
 import { listDriveFiles, getMediaStreamUrl, findFolder, createFolder } from './services/GoogleDriveService'
 import MediaExplorer from './components/MediaExplorer'
 import CameraStreamer from './components/CameraStreamer'
 import StreamViewer from './components/StreamViewer'
 
-function App({ isConfigMissing }) {
+/**
+ * The main application logic and UI. 
+ * This component is only rendered when the Google Client ID is present.
+ */
+function StyxAppContent() {
   const [activeTab, setActiveTab] = useState('library')
   const [accessToken, setAccessToken] = useState(null)
   const [files, setFiles] = useState([])
@@ -16,11 +20,8 @@ function App({ isConfigMissing }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   
-  // Folder logic
   const [baseFolder, setBaseFolder] = useState({ id: 'root', name: 'Meu Drive' })
   const [isInitializing, setIsInitializing] = useState(false)
-
-  // Stream viewer logic
   const [streamId, setStreamId] = useState(null)
 
   useEffect(() => {
@@ -63,20 +64,16 @@ function App({ isConfigMissing }) {
   const initializeDrive = async () => {
     setIsInitializing(true)
     try {
-      // 1. Look for 'Styx' folder
       let styxFolder = await findFolder(accessToken, 'Styx')
-      
-      // 2. Create if not exists
       if (!styxFolder) {
         styxFolder = await createFolder(accessToken, 'Styx')
       }
-      
       setBaseFolder(styxFolder)
       loadFiles(styxFolder.id)
     } catch (err) {
       console.error("Initialization error:", err)
       setError("Erro ao configurar pasta Styx. Verifique permissões.")
-      loadFiles('root') // Fallback to root
+      loadFiles('root')
     } finally {
       setIsInitializing(false)
     }
@@ -153,9 +150,7 @@ function App({ isConfigMissing }) {
                 <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>Pasta Base:</span>
               </div>
               <p style={{ fontSize: '0.8rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{baseFolder.name}</p>
-              <button 
-                onClick={() => handleFolderClick({ id: 'root', name: 'Meu Drive' })}
-                style={{ width: '100%', fontSize: '0.7rem', padding: '0.4rem', marginTop: '0.5rem' }}>
+              <button onClick={() => handleFolderClick({ id: 'root', name: 'Meu Drive' })} style={{ width: '100%', fontSize: '0.7rem', padding: '0.4rem', marginTop: '0.5rem' }}>
                 <FolderSymlink size={12} /> Alterar
               </button>
               <button onClick={logout} style={{ width: '100%', justifyContent: 'flex-start', color: '#ff4444', background: 'none', border: 'none', marginTop: '1rem' }}>
@@ -174,9 +169,7 @@ function App({ isConfigMissing }) {
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
           <div>
             {baseFolder.id !== 'root' && (
-              <button 
-                onClick={() => handleFolderClick({ id: 'root', name: 'Meu Drive' })}
-                style={{ background: 'none', border: 'none', opacity: 0.5, fontSize: '0.9rem', padding: 0 }}>
+              <button onClick={() => handleFolderClick({ id: 'root', name: 'Meu Drive' })} style={{ background: 'none', border: 'none', opacity: 0.5, fontSize: '0.9rem', padding: 0 }}>
                 &larr; Voltar para a Raiz
               </button>
             )}
@@ -191,22 +184,6 @@ function App({ isConfigMissing }) {
              {(loading || isInitializing) && <p style={{ opacity: 0.5, fontSize: '0.8rem' }}>Processando...</p>}
           </div>
         </header>
-
-        {isConfigMissing && (
-          <div className="card" style={{ border: '1px solid #eab308', background: 'rgba(234, 179, 8, 0.1)', color: '#eab308', marginBottom: '2rem' }}>
-            <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              ⚠️ Configuração Necessária
-            </h3>
-            <p style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: 'white', opacity: 0.8 }}>
-              O <b>VITE_GOOGLE_CLIENT_ID</b> não foi encontrado. Se você estiver no Vercel:
-            </p>
-            <ol style={{ marginLeft: '1.5rem', marginTop: '0.5rem', fontSize: '0.85rem', color: 'white', opacity: 0.7 }}>
-              <li>Vá em <b>Settings &gt; Environment Variables</b>.</li>
-              <li>Adicione <code>VITE_GOOGLE_CLIENT_ID</code> com o seu ID do Google.</li>
-              <li>Faça um <b>Redeploy</b> para aplicar as mudanças.</li>
-            </ol>
-          </div>
-        )}
 
         {error && (
           <div className="card" style={{ border: '1px solid #ff4444', color: '#ff4444', marginBottom: '2rem' }}>
@@ -225,11 +202,7 @@ function App({ isConfigMissing }) {
           >
             {activeTab === 'library' && (
               accessToken ? (
-                <MediaExplorer 
-                  files={files} 
-                  onFileClick={handleFileClick} 
-                  onFolderClick={handleFolderClick} 
-                />
+                <MediaExplorer files={files} onFileClick={handleFileClick} onFolderClick={handleFolderClick} />
               ) : (
                 <div style={{ textAlign: 'center', padding: '8rem 0' }}>
                   <Music size={64} opacity={0.1} />
@@ -241,7 +214,6 @@ function App({ isConfigMissing }) {
             )}
 
             {activeTab === 'camera' && <CameraStreamer />}
-
             {activeTab === 'view-stream' && streamId && <StreamViewer streamId={streamId} />}
 
             {activeTab === 'player' && currentFile && (
@@ -265,7 +237,6 @@ function App({ isConfigMissing }) {
       </main>
 
       <footer className="player-bar">
-        {/* ... Player controls same as before ... */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <div style={{ width: '50px', height: '50px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {currentFile ? (currentFile.mimeType.startsWith('audio/') ? <Music size={20} /> : <Video size={20} />) : <LayoutGrid size={20} opacity={0.2} />}
@@ -279,10 +250,7 @@ function App({ isConfigMissing }) {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
             <SkipBack size={18} style={{ opacity: 0.5, cursor: 'not-allowed' }} />
-            <button 
-              onClick={() => setIsPlaying(!isPlaying)}
-              style={{ background: 'white', color: 'black', width: '36px', height: '36px', borderRadius: '50%', padding: 0, justifyContent: 'center' }}
-            >
+            <button onClick={() => setIsPlaying(!isPlaying)} style={{ background: 'white', color: 'black', width: '36px', height: '36px', borderRadius: '50%', padding: 0, justifyContent: 'center' }}>
               {isPlaying ? <Pause size={18} fill="black" /> : <Play size={18} fill="black" style={{ marginLeft: '2px' }} />}
             </button>
             <SkipForward size={18} style={{ opacity: 0.5, cursor: 'not-allowed' }} />
@@ -291,10 +259,44 @@ function App({ isConfigMissing }) {
             <div style={{ height: '100%', width: isPlaying ? '35%' : '0%', background: 'var(--accent-primary)', borderRadius: '2px', transition: 'width 0.5s linear' }}></div>
           </div>
         </div>
-
         <div style={{ flex: 1 }}></div>
       </footer>
     </div>
+  )
+}
+
+/**
+ * Shell component that either renders the app or the config warning.
+ */
+function App({ clientId }) {
+  if (!clientId) {
+    return (
+      <div className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '2rem' }}>
+        <div className="card" style={{ maxWidth: '500px', border: '1px solid #eab308', background: 'rgba(234, 179, 8, 0.1)', color: '#eab308' }}>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>⚠️ Configuração Necessária</h2>
+          <p style={{ marginTop: '1rem', color: 'white', opacity: 0.8 }}>
+            O <b>VITE_GOOGLE_CLIENT_ID</b> não foi encontrado no ambiente.
+          </p>
+          <div style={{ marginTop: '1.5rem', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '12px' }}>
+            <p style={{ fontSize: '0.9rem', color: 'white', fontWeight: 600 }}>No Vercel:</p>
+            <ol style={{ marginLeft: '1.2rem', marginTop: '0.5rem', fontSize: '0.85rem', color: 'white', opacity: 0.7, lineHeight: 1.6 }}>
+              <li>Vá em <b>Settings &gt; Environment Variables</b>.</li>
+              <li>Crie <code>VITE_GOOGLE_CLIENT_ID</code>.</li>
+              <li>Faça um <b>Redeploy</b> (aba Deployments &gt; Redeploy).</li>
+            </ol>
+          </div>
+          <button className="primary" onClick={() => window.location.reload()} style={{ marginTop: '1.5rem', width: '100%', justifyContent: 'center' }}>
+            Já configurei, recarregar
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <GoogleOAuthProvider clientId={clientId}>
+      <StyxAppContent />
+    </GoogleOAuthProvider>
   )
 }
 
