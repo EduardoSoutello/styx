@@ -224,7 +224,11 @@ function StyxAppContent() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div className="mobile-header-spacer" style={{ width: '80px', flexShrink: 0 }}></div>
             <div>
-              <h2 style={{ fontSize: '1.2rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>{baseFolder.name}</h2>
+              {(baseFolder.name !== 'Styx' && baseFolder.id !== 'root') && (
+                <h2 style={{ fontSize: '1.2rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px' }}>
+                  {baseFolder.name}
+                </h2>
+              )}
             </div>
           </div>
           
