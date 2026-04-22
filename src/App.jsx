@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { Music, Video, Camera, LayoutGrid, Settings, Play, Pause, SkipForward, SkipBack, Search, LogOut, Folder, FolderSymlink, Menu, X, Home } from 'lucide-react'
+import { Music, Video, Camera, LayoutGrid, Settings, Play, Pause, SkipForward, SkipBack, Search, LogOut, Folder, FolderSymlink, Menu, X, Home, Radio } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGoogleLogin, googleLogout, GoogleOAuthProvider } from '@react-oauth/google'
 import { listDriveFiles, getMediaStreamUrl, findFolder, createFolder } from './services/GoogleDriveService'
 import MediaExplorer from './components/MediaExplorer'
 import CameraStreamer from './components/CameraStreamer'
 import StreamViewer from './components/StreamViewer'
+import RadioTuner from './components/RadioTuner'
 
 /**
  * The main application logic and UI. 
@@ -116,6 +117,7 @@ function StyxAppContent() {
 
   const navItems = [
     { id: 'library', icon: LayoutGrid, label: 'Biblioteca' },
+    { id: 'radio', icon: Radio, label: 'Rádio Online' },
     { id: 'camera', icon: Camera, label: 'Câmera Stream' },
   ]
 
@@ -274,6 +276,19 @@ function StyxAppContent() {
               )
             )}
 
+            {activeTab === 'radio' && (
+              <RadioTuner 
+                onStationClick={(station) => {
+                  setCurrentFile({
+                    id: station.stationuuid,
+                    name: station.name,
+                    mimeType: 'audio/mpeg',
+                    streamUrl: station.url_resolved
+                  });
+                  setIsPlaying(true);
+                }}
+              />
+            )}
             {activeTab === 'camera' && <CameraStreamer />}
             {activeTab === 'view-stream' && streamId && <StreamViewer streamId={streamId} />}
 
