@@ -7,7 +7,7 @@ import MediaExplorer from './components/MediaExplorer'
 import CameraStreamer from './components/CameraStreamer'
 import StreamViewer from './components/StreamViewer'
 
-function App() {
+function App({ isConfigMissing }) {
   const [activeTab, setActiveTab] = useState('library')
   const [accessToken, setAccessToken] = useState(null)
   const [files, setFiles] = useState([])
@@ -191,6 +191,22 @@ function App() {
              {(loading || isInitializing) && <p style={{ opacity: 0.5, fontSize: '0.8rem' }}>Processando...</p>}
           </div>
         </header>
+
+        {isConfigMissing && (
+          <div className="card" style={{ border: '1px solid #eab308', background: 'rgba(234, 179, 8, 0.1)', color: '#eab308', marginBottom: '2rem' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              ⚠️ Configuração Necessária
+            </h3>
+            <p style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: 'white', opacity: 0.8 }}>
+              O <b>VITE_GOOGLE_CLIENT_ID</b> não foi encontrado. Se você estiver no Vercel:
+            </p>
+            <ol style={{ marginLeft: '1.5rem', marginTop: '0.5rem', fontSize: '0.85rem', color: 'white', opacity: 0.7 }}>
+              <li>Vá em <b>Settings &gt; Environment Variables</b>.</li>
+              <li>Adicione <code>VITE_GOOGLE_CLIENT_ID</code> com o seu ID do Google.</li>
+              <li>Faça um <b>Redeploy</b> para aplicar as mudanças.</li>
+            </ol>
+          </div>
+        )}
 
         {error && (
           <div className="card" style={{ border: '1px solid #ff4444', color: '#ff4444', marginBottom: '2rem' }}>
