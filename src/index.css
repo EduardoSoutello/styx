@@ -164,16 +164,30 @@ button.primary:hover {
   filter: brightness(1.1);
 }
 
-.mobile-header {
+.mobile-sidebar-toggle {
+  display: none !important;
+}
+
+.mobile-header-spacer {
   display: none;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 2rem;
 }
 
 @media (max-width: 768px) {
-  .mobile-header {
-    display: flex;
+  .mobile-sidebar-toggle {
+    display: flex !important;
+  }
+  
+  .mobile-header-spacer {
+    display: block;
+    width: 60px !important;
+  }
+
+  .main-content header {
+    padding-left: 0;
+  }
+
+  .sidebar {
+    width: 85% !important;
   }
 }
 
