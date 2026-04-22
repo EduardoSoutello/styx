@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Music, Video, Camera, LayoutGrid, Settings, Play, Pause, SkipForward, SkipBack, Search, LogOut, Folder, FolderSymlink, Menu, X, Home, Radio } from 'lucide-react'
+import { Music, Video, Camera, LayoutGrid, Play, Pause, SkipForward, SkipBack, Search, LogOut, Folder, FolderSymlink, X, Home, Radio } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGoogleLogin, googleLogout, GoogleOAuthProvider } from '@react-oauth/google'
 import { listDriveFiles, getMediaStreamUrl, findFolder, createFolder } from './services/GoogleDriveService'
@@ -9,7 +9,7 @@ import StreamViewer from './components/StreamViewer'
 import RadioTuner from './components/RadioTuner'
 
 /**
- * The main application logic and UI. 
+ * The main application logic and UI.
  * This component is only rendered when the Google Client ID is present.
  */
 function StyxAppContent() {
@@ -20,26 +20,23 @@ function StyxAppContent() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  
   const [baseFolder, setBaseFolder] = useState({ id: 'root', name: 'Meu Drive' })
   const [isInitializing, setIsInitializing] = useState(false)
   const [streamId, setStreamId] = useState(null)
-  
-  // Mobile Sidebar State
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+
+  // The REAL audio element that plays everything
+  const audioRef = useRef(null)
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen)
-  const closeSidebar = () => {
-    if (window.innerWidth <= 768) setIsSidebarOpen(false)
-  }
+  const closeSidebar = () => { if (window.innerWidth <= 768) setIsSidebarOpen(false) }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const sid = params.get('streamId')
-    if (sid) {
-      setStreamId(sid)
-      setActiveTab('view-stream')
-    }
+    if (sid) { setStreamId(sid); setActiveTab('view-stream') }
   }, [])
 
   const login = useGoogleLogin({
@@ -57,6 +54,9 @@ function StyxAppContent() {
     setFiles([])
     setBaseFolder({ id: 'root', name: 'Meu Drive' })
     localStorage.removeItem('gdrive_token')
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = '' }
+    setCurrentFile(null)
+    setIsPlaying(false)
   }
 
   useEffect(() => {
@@ -65,23 +65,40 @@ function StyxAppContent() {
   }, [])
 
   useEffect(() => {
-    if (accessToken) {
-      initializeDrive()
-    }
+    if (accessToken) initializeDrive()
   }, [accessToken])
+
+  // Play/pause sync with audioRef
+  useEffect(() => {
+    if (!audioRef.current || !currentFile?.streamUrl) return
+    if (isPlaying) {
+      audioRef.current.play().catch(e => console.warn('Play error:', e))
+    } else {
+      audioRef.current.pause()
+    }
+  }, [isPlaying])
+
+  // When new file is set, load it and play
+  useEffect(() => {
+    if (!audioRef.current || !currentFile?.streamUrl) return
+    const audio = audioRef.current
+    audio.src = currentFile.streamUrl
+    audio.load()
+    if (isPlaying) {
+      audio.play().catch(e => console.warn('Auto-play error:', e))
+    }
+  }, [currentFile?.streamUrl])
 
   const initializeDrive = async () => {
     setIsInitializing(true)
     try {
       let styxFolder = await findFolder(accessToken, 'Styx')
-      if (!styxFolder) {
-        styxFolder = await createFolder(accessToken, 'Styx')
-      }
+      if (!styxFolder) styxFolder = await createFolder(accessToken, 'Styx')
       setBaseFolder(styxFolder)
       loadFiles(styxFolder.id)
     } catch (err) {
-      console.error("Initialization error:", err)
-      setError("Erro ao configurar pasta Styx. Verifique permissões.")
+      console.error('Initialization error:', err)
+      setError('Erro ao configurar pasta Styx.')
       loadFiles('root')
     } finally {
       setIsInitializing(false)
@@ -105,15 +122,27 @@ function StyxAppContent() {
     const streamUrl = await getMediaStreamUrl(accessToken, file.id)
     setCurrentFile({ ...file, streamUrl })
     setIsPlaying(true)
-    if (file.mimeType.startsWith('video/')) {
-      setActiveTab('player')
-    }
+    if (file.mimeType.startsWith('video/')) setActiveTab('player')
   }
 
   const handleFolderClick = (folder) => {
     setBaseFolder(folder)
     loadFiles(folder.id)
   }
+
+  const handleStationClick = (station) => {
+    setCurrentFile({
+      id: station.stationuuid,
+      name: station.name,
+      mimeType: 'audio/mpeg',
+      streamUrl: station.url_resolved
+    })
+    setIsPlaying(true)
+  }
+
+  const togglePlayPause = () => setIsPlaying(!isPlaying)
+
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
 
   const navItems = [
     { id: 'library', icon: LayoutGrid, label: 'Biblioteca' },
@@ -123,53 +152,38 @@ function StyxAppContent() {
 
   return (
     <div className="app-container">
+      {/* Hidden real audio player */}
+      <audio
+        ref={audioRef}
+        onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
+        onDurationChange={() => setDuration(audioRef.current?.duration || 0)}
+        onEnded={() => setIsPlaying(false)}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+      />
+
       <div className="glow-background" />
-      
+
       {/* Sidebar Overlay */}
       {isSidebarOpen && (
-        <div 
-          onClick={closeSidebar}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            backdropFilter: 'blur(4px)',
-            zIndex: 900
-          }}
-        />
+        <div onClick={closeSidebar} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 900 }} />
       )}
 
-      {/* Sidebar Mobile Toggle (The "recoiled" STYX button) */}
-      <button 
+      {/* Mobile STYX toggle button */}
+      <button
         className="mobile-sidebar-toggle"
         onClick={toggleSidebar}
-        style={{
-          position: 'fixed',
-          top: '1rem',
-          left: '1rem',
-          zIndex: 850,
-          padding: '0.5rem 1rem',
-          borderRadius: '12px',
-          background: 'var(--accent-gradient)',
-          border: 'none',
-          boxShadow: 'var(--shadow-glow)',
-          display: isSidebarOpen ? 'none' : 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}
+        style={{ display: isSidebarOpen ? 'none' : undefined }}
       >
         <span style={{ fontWeight: 800, letterSpacing: '2px', fontSize: '1rem' }}>STYX</span>
       </button>
 
       <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <div className="logo" onClick={() => { window.location.href = window.location.origin; closeSidebar(); }} style={{ cursor: 'pointer' }}>
+          <div className="logo" onClick={() => { window.location.href = window.location.origin; closeSidebar() }} style={{ cursor: 'pointer' }}>
             <h1 className="gradient-text" style={{ fontSize: '2rem' }}>STYX</h1>
           </div>
-          <button 
-            onClick={toggleSidebar} 
-            style={{ background: 'none', border: 'none', padding: '0.5rem', display: 'flex' }}
-          >
+          <button onClick={toggleSidebar} style={{ background: 'none', border: 'none', padding: '0.5rem', display: 'flex' }}>
             <X size={24} />
           </button>
         </div>
@@ -178,12 +192,11 @@ function StyxAppContent() {
           <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {navItems.map((item) => (
               <li key={item.id}>
-                <button 
+                <button
                   className={`nav-btn ${activeTab === item.id ? 'active' : ''}`}
-                  onClick={() => { setActiveTab(item.id); closeSidebar(); }}
+                  onClick={() => { setActiveTab(item.id); closeSidebar() }}
                   style={{
-                    width: '100%',
-                    justifyContent: 'flex-start',
+                    width: '100%', justifyContent: 'flex-start',
                     background: activeTab === item.id ? 'rgba(0, 242, 255, 0.1)' : 'transparent',
                     borderColor: activeTab === item.id ? 'var(--accent-primary)' : 'transparent',
                   }}
@@ -204,15 +217,15 @@ function StyxAppContent() {
                 <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>Pasta Base:</span>
               </div>
               <p style={{ fontSize: '0.8rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{baseFolder.name}</p>
-              <button onClick={() => { handleFolderClick({ id: 'root', name: 'Meu Drive' }); closeSidebar(); }} style={{ width: '100%', fontSize: '0.7rem', padding: '0.4rem', marginTop: '0.5rem' }}>
+              <button onClick={() => { handleFolderClick({ id: 'root', name: 'Meu Drive' }); closeSidebar() }} style={{ width: '100%', fontSize: '0.7rem', padding: '0.4rem', marginTop: '0.5rem' }}>
                 <FolderSymlink size={12} /> Alterar
               </button>
-              <button onClick={() => { logout(); closeSidebar(); }} style={{ width: '100%', justifyContent: 'flex-start', color: '#ff4444', background: 'none', border: 'none', marginTop: '1rem' }}>
+              <button onClick={() => { logout(); closeSidebar() }} style={{ width: '100%', justifyContent: 'flex-start', color: '#ff4444', background: 'none', border: 'none', marginTop: '1rem' }}>
                 <LogOut size={16} /> <span style={{ fontSize: '0.75rem' }}>Sair da Conta</span>
               </button>
             </div>
           ) : (
-            <button className="primary" onClick={() => { login(); closeSidebar(); }} style={{ width: '100%' }}>
+            <button className="primary" onClick={() => { login(); closeSidebar() }} style={{ width: '100%' }}>
               Conectar Drive
             </button>
           )}
@@ -220,9 +233,10 @@ function StyxAppContent() {
       </aside>
 
       <main className="main-content">
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div className="mobile-header-spacer" style={{ width: '80px', flexShrink: 0 }}></div>
+        {/* Header: hamburger + folder name + actions */}
+        <header className="app-header">
+          <div className="app-header-left">
+            <div className="mobile-header-spacer" />
             <div>
               {(baseFolder.name !== 'Styx' && baseFolder.id !== 'root') && (
                 <h2 style={{ fontSize: '1.2rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px' }}>
@@ -231,26 +245,27 @@ function StyxAppContent() {
               )}
             </div>
           </div>
-          
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-             <div className="desktop-only" style={{ position: 'relative' }}>
-                <Search style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} size={18} />
-                <input type="text" placeholder="Buscar..." style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '0.5rem 1rem 0.5rem 3rem', color: 'white' }} />
-             </div>
-             
-             {baseFolder.id !== 'root' && (
-                <button 
-                  onClick={() => handleFolderClick({ id: 'root', name: 'Meu Drive' })} 
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', padding: '0.6rem' }}
-                  title="Voltar para Raiz"
-                >
-                  <Home size={20} color="var(--accent-primary)" />
-                </button>
-             )}
-             
-             {(loading || isInitializing) && <p style={{ opacity: 0.5, fontSize: '0.8rem' }}>...</p>}
+          <div className="app-header-right">
+            <div className="desktop-search" style={{ position: 'relative' }}>
+              <Search style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} size={18} />
+              <input type="text" placeholder="Buscar..." style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '0.5rem 1rem 0.5rem 3rem', color: 'white', width: '220px' }} />
+            </div>
+            {baseFolder.id !== 'root' && (
+              <button onClick={() => handleFolderClick({ id: 'root', name: 'Meu Drive' })} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', padding: '0.6rem' }} title="Voltar para Raiz">
+                <Home size={20} color="var(--accent-primary)" />
+              </button>
+            )}
+            {(loading || isInitializing) && <p style={{ opacity: 0.5, fontSize: '0.8rem' }}>...</p>}
           </div>
         </header>
+
+        {/* Mobile search below header */}
+        <div className="mobile-search" style={{ marginBottom: '1.5rem' }}>
+          <div style={{ position: 'relative' }}>
+            <Search style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} size={18} />
+            <input type="text" placeholder="Buscar..." style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '0.5rem 1rem 0.5rem 3rem', color: 'white', width: '100%' }} />
+          </div>
+        </div>
 
         {error && (
           <div className="card" style={{ border: '1px solid #ff4444', color: '#ff4444', marginBottom: '2rem' }}>
@@ -260,16 +275,10 @@ function StyxAppContent() {
         )}
 
         <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2 }}
-          >
+          <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
             {activeTab === 'library' && (
               accessToken ? (
-                <MediaExplorer files={files} onFileClick={handleFileClick} onFolderClick={handleFolderClick} />
+                <MediaExplorer files={files} onFileClick={handleFileClick} onFolderClick={handleFolderClick} currentFileId={currentFile?.id} isPlaying={isPlaying} />
               ) : (
                 <div style={{ textAlign: 'center', padding: '8rem 0' }}>
                   <Music size={64} opacity={0.1} />
@@ -280,66 +289,64 @@ function StyxAppContent() {
               )
             )}
 
-            {activeTab === 'radio' && (
-              <RadioTuner 
-                onStationClick={(station) => {
-                  setCurrentFile({
-                    id: station.stationuuid,
-                    name: station.name,
-                    mimeType: 'audio/mpeg',
-                    streamUrl: station.url_resolved
-                  });
-                  setIsPlaying(true);
-                }}
-              />
-            )}
+            {activeTab === 'radio' && <RadioTuner onStationClick={handleStationClick} />}
             {activeTab === 'camera' && <CameraStreamer />}
             {activeTab === 'view-stream' && streamId && <StreamViewer streamId={streamId} />}
 
             {activeTab === 'player' && currentFile && (
               <div className="card" style={{ maxWidth: '900px', margin: '0 auto' }}>
-                 <button onClick={() => setActiveTab('library')} style={{ marginBottom: '1rem' }}>&larr; Fechar Player</button>
-                 <div style={{ width: '100%', background: '#000', borderRadius: '16px', overflow: 'hidden', boxShadow: 'var(--shadow-glow)' }}>
-                    {currentFile.mimeType.startsWith('video/') ? (
-                      <video src={currentFile.streamUrl} controls autoPlay style={{ width: '100%', maxHeight: '70vh' }} />
-                    ) : (
-                      <div style={{ padding: '6rem', textAlign: 'center' }}>
-                         <Music size={80} color="var(--accent-primary)" style={{ filter: 'drop-shadow(0 0 10px var(--accent-primary))' }} />
-                         <h2 style={{ marginTop: '2.5rem' }}>{currentFile.name}</h2>
-                         <audio src={currentFile.streamUrl} controls autoPlay style={{ width: '100%', marginTop: '3rem' }} />
-                      </div>
-                    )}
-                 </div>
+                <button onClick={() => setActiveTab('library')} style={{ marginBottom: '1rem' }}>&larr; Fechar Player</button>
+                <div style={{ width: '100%', background: '#000', borderRadius: '16px', overflow: 'hidden', boxShadow: 'var(--shadow-glow)' }}>
+                  {currentFile.mimeType.startsWith('video/') ? (
+                    <video src={currentFile.streamUrl} controls autoPlay style={{ width: '100%', maxHeight: '70vh' }} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} />
+                  ) : (
+                    <div style={{ padding: '4rem', textAlign: 'center' }}>
+                      <Music size={80} color="var(--accent-primary)" style={{ filter: 'drop-shadow(0 0 10px var(--accent-primary))' }} />
+                      <h2 style={{ marginTop: '2rem' }}>{currentFile.name}</h2>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </motion.div>
         </AnimatePresence>
       </main>
 
+      {/* Player Bar */}
       <footer className="player-bar">
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '50px', height: '50px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '1rem', minWidth: 0 }}>
+          <div style={{ width: '44px', height: '44px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             {currentFile ? (currentFile.mimeType.startsWith('audio/') ? <Music size={20} /> : <Video size={20} />) : <LayoutGrid size={20} opacity={0.2} />}
           </div>
-          <div style={{ maxWidth: '200px' }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <h4 style={{ fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentFile ? currentFile.name : 'Nenhuma mídia'}</h4>
-            <p style={{ fontSize: '0.7rem', opacity: 0.5 }}>{currentFile ? 'Google Drive' : '---'}</p>
+            <p style={{ fontSize: '0.7rem', opacity: 0.5 }}>{currentFile ? (currentFile.id?.startsWith?.('0') ? 'Google Drive' : 'Rádio Online') : '---'}</p>
           </div>
         </div>
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
-            <SkipBack size={18} style={{ opacity: 0.5, cursor: 'not-allowed' }} />
-            <button onClick={() => setIsPlaying(!isPlaying)} style={{ background: 'white', color: 'black', width: '36px', height: '36px', borderRadius: '50%', padding: 0, justifyContent: 'center' }}>
+            <SkipBack size={18} style={{ opacity: 0.3, cursor: 'not-allowed' }} />
+            <button
+              onClick={togglePlayPause}
+              style={{ background: 'white', color: 'black', width: '36px', height: '36px', borderRadius: '50%', padding: 0, justifyContent: 'center', flexShrink: 0 }}
+            >
               {isPlaying ? <Pause size={18} fill="black" /> : <Play size={18} fill="black" style={{ marginLeft: '2px' }} />}
             </button>
-            <SkipForward size={18} style={{ opacity: 0.5, cursor: 'not-allowed' }} />
+            <SkipForward size={18} style={{ opacity: 0.3, cursor: 'not-allowed' }} />
           </div>
-          <div style={{ width: '100%', maxWidth: '350px', height: '3px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px' }}>
-            <div style={{ height: '100%', width: isPlaying ? '35%' : '0%', background: 'var(--accent-primary)', borderRadius: '2px', transition: 'width 0.5s linear' }}></div>
+          <div style={{ width: '200px', height: '3px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', cursor: 'pointer' }}
+            onClick={(e) => {
+              if (!audioRef.current || !duration) return
+              const rect = e.currentTarget.getBoundingClientRect()
+              const ratio = (e.clientX - rect.left) / rect.width
+              audioRef.current.currentTime = ratio * duration
+            }}
+          >
+            <div style={{ height: '100%', width: `${progressPercent}%`, background: 'var(--accent-primary)', borderRadius: '2px', transition: 'width 0.5s linear' }} />
           </div>
         </div>
-        <div style={{ flex: 1 }}></div>
+        <div style={{ flex: 1 }} />
       </footer>
     </div>
   )
@@ -354,15 +361,13 @@ function App({ clientId }) {
       <div className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '2rem' }}>
         <div className="card" style={{ maxWidth: '500px', border: '1px solid #eab308', background: 'rgba(234, 179, 8, 0.1)', color: '#eab308' }}>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>⚠️ Configuração Necessária</h2>
-          <p style={{ marginTop: '1rem', color: 'white', opacity: 0.8 }}>
-            O <b>VITE_GOOGLE_CLIENT_ID</b> não foi encontrado no ambiente.
-          </p>
+          <p style={{ marginTop: '1rem', color: 'white', opacity: 0.8 }}>O <b>VITE_GOOGLE_CLIENT_ID</b> não foi encontrado no ambiente.</p>
           <div style={{ marginTop: '1.5rem', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '12px' }}>
             <p style={{ fontSize: '0.9rem', color: 'white', fontWeight: 600 }}>No Vercel:</p>
             <ol style={{ marginLeft: '1.2rem', marginTop: '0.5rem', fontSize: '0.85rem', color: 'white', opacity: 0.7, lineHeight: 1.6 }}>
               <li>Vá em <b>Settings &gt; Environment Variables</b>.</li>
               <li>Crie <code>VITE_GOOGLE_CLIENT_ID</code>.</li>
-              <li>Faça um <b>Redeploy</b> (aba Deployments &gt; Redeploy).</li>
+              <li>Faça um <b>Redeploy</b>.</li>
             </ol>
           </div>
           <button className="primary" onClick={() => window.location.reload()} style={{ marginTop: '1.5rem', width: '100%', justifyContent: 'center' }}>
