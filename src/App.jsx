@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, X, LogOut, Cloud, Settings, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, X, LogOut, Cloud, Settings, ChevronDown, ChevronRight, Home } from 'lucide-react'
 import { useGoogleLogin, googleLogout, GoogleOAuthProvider } from '@react-oauth/google'
 import { CloudManager } from './services/CloudManager'
 import FileManager from './components/FileManager'
+import HomeView from './components/HomeView'
 import ConnectModal from './components/ConnectModal'
 import ProviderBadge, { PROVIDER_CONFIG } from './components/ProviderBadge'
 import StorageBar from './components/StorageBar'
@@ -22,12 +23,8 @@ function StyxAppContent() {
     return CloudManager.subscribe(updated => setAccounts([...updated]))
   }, [])
 
-  // Auto-select first account
-  useEffect(() => {
-    if (!activeAccountId && accounts.length > 0) {
-      setActiveAccount(accounts[0].id)
-    }
-  }, [accounts, activeAccountId])
+  // Go home (deselect account)
+  const goHome = () => setActiveAccount(null)
 
   const toggleSidebar = () => setIsSidebarOpen(s => !s)
   const closeSidebar  = () => { if (window.innerWidth <= 768) setIsSidebarOpen(false) }
@@ -77,10 +74,7 @@ function StyxAppContent() {
     if (!confirm('Desconectar esta conta?')) return
     if (id === 'googledrive') googleLogout()
     CloudManager.disconnect(id)
-    if (activeAccountId === id) {
-      const remaining = CloudManager.accounts
-      setActiveAccount(remaining[0]?.id || null)
-    }
+    if (activeAccountId === id) setActiveAccount(null)
   }
 
   // Group accounts by provider for sidebar rendering
@@ -230,14 +224,23 @@ function StyxAppContent() {
         <header className="app-header" style={{ marginBottom: '1.5rem' }}>
           <div className="app-header-left">
             <div className="mobile-header-spacer" />
-            {activeAccount && (
+            {activeAccount ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <button
+                  onClick={goHome}
+                  title="Voltar ao início"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', padding: '0.4rem', borderRadius: '10px' }}
+                >
+                  <Home size={16} />
+                </button>
                 <ProviderBadge providerId={activeAccount.providerId} size="md" />
                 <div>
                   <h2 style={{ fontSize: '1.05rem', fontWeight: 700 }}>{activeAccount.name}</h2>
                   <p style={{ fontSize: '0.72rem', opacity: 0.45 }}>{activeAccount.email}</p>
                 </div>
               </div>
+            ) : (
+              <h2 style={{ fontSize: '1.05rem', fontWeight: 700, opacity: 0.6 }}>Minhas Nuvens</h2>
             )}
           </div>
 
@@ -271,17 +274,24 @@ function StyxAppContent() {
           </div>
         </header>
 
-        {/* File Manager */}
+        {/* Home or File Manager */}
         <AnimatePresence mode="wait">
           <motion.div
-            key={activeAccountId || 'empty'}
+            key={activeAccountId || 'home'}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.15 }}
             style={{ height: 'calc(100% - 80px)' }}
           >
-            <FileManager accountId={activeAccountId} />
+            {activeAccountId
+              ? <FileManager accountId={activeAccountId} />
+              : <HomeView
+                  accounts={accounts}
+                  onOpenAccount={id => setActiveAccount(id)}
+                  onAddAccount={() => setShowConnect(true)}
+                />
+            }
           </motion.div>
         </AnimatePresence>
       </main>

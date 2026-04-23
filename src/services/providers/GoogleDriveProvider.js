@@ -48,10 +48,11 @@ export const GoogleDriveProvider = {
   icon: 'google-drive',
 
   /** List files in a folder */
-  async listFiles(token, folderId = 'root') {
+  async listFiles(token, folderId = null) {
+    const folder = folderId || 'root'
     const fields = 'files(id,name,mimeType,size,modifiedTime,parents,iconLink,thumbnailLink)'
     const data = await driveGet(token, '/files', {
-      q: `'${folderId}' in parents and trashed = false`,
+      q: `'${folder}' in parents and trashed = false`,
       fields,
       pageSize: '100',
       orderBy: 'folder,name'
