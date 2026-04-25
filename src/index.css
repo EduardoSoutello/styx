@@ -500,23 +500,34 @@ input::placeholder { opacity: 0.35; }
   .fm-search { width: 120px; }
   .fm-search:focus { width: 150px; }
 
-  .home-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
-  .home-account-card { padding: 1.25rem; }
+  .home-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.6rem; }
+  .home-account-card { padding: 0.8rem; min-height: 140px; }
+  .home-account-card > div:first-child {
+    width: 40px !important;
+    height: 40px !important;
+    margin-bottom: 0.5rem !important;
+    border-radius: 10px !important;
+  }
+  .home-account-card > div:first-child > span { transform: scale(1.6) !important; }
 }
 
 @media (max-width: 480px) {
   .file-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
   .connect-modal { padding: 1.5rem; }
-  .home-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.85rem; }
-  .home-account-card { padding: 1rem; min-height: 160px; }
+  .home-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.6rem; }
+  .home-account-card { padding: 0.75rem; min-height: 130px; }
   .home-account-card > div:first-child {
-    width: 42px !important;
-    height: 42px !important;
-    margin-bottom: 0.5rem !important;
-    border-radius: 12px !important;
+    width: 36px !important;
+    height: 36px !important;
+    margin-bottom: 0.4rem !important;
+    border-radius: 8px !important;
   }
-  .home-account-card > div:first-child > span { transform: scale(1.8) !important; }
+  .home-account-card > div:first-child > span { transform: scale(1.4) !important; }
+  .home-account-card h3 { font-size: 0.8rem !important; }
+  .home-account-card p { font-size: 0.65rem !important; margin-bottom: 0.5rem !important; }
 }
+
+
 
 /* ── Home View ───────────────────────────────────────────────────────────────── */
 .home-grid {
