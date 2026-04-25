@@ -507,7 +507,15 @@ input::placeholder { opacity: 0.35; }
 @media (max-width: 480px) {
   .file-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
   .connect-modal { padding: 1.5rem; }
-  .home-grid { grid-template-columns: 1fr; gap: 0.85rem; }
+  .home-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.85rem; }
+  .home-account-card { padding: 1rem; min-height: 160px; }
+  .home-account-card > div:first-child {
+    width: 42px !important;
+    height: 42px !important;
+    margin-bottom: 0.5rem !important;
+    border-radius: 12px !important;
+  }
+  .home-account-card > div:first-child > span { transform: scale(1.8) !important; }
 }
 
 /* ── Home View ───────────────────────────────────────────────────────────────── */

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, X, LogOut, Cloud, Settings, ChevronDown, ChevronRight, Home, User } from 'lucide-react'
+import { motion, AnimatePresence, Reorder } from 'framer-motion'
+import { Plus, X, LogOut, Cloud, Settings, Home, User, GripVertical } from 'lucide-react'
 import { useGoogleLogin, googleLogout, GoogleOAuthProvider } from '@react-oauth/google'
 import { CloudManager } from './services/CloudManager'
 import { onAuthStateChanged, signOut } from './services/AuthService'
@@ -50,7 +50,6 @@ function StyxAppContent({ currentUser }) {
   const [activeAccountId, setActiveAccount]  = useState(null)
   const [showConnect,     setShowConnect]    = useState(false)
   const [isSidebarOpen,   setIsSidebarOpen]  = useState(false)
-  const [expandedGroups,  setExpandedGroups] = useState({})
   const [showDrivePrompt, setShowDrivePrompt] = useState(false)
   const [drivePromptLoading, setDrivePromptLoading] = useState(false)
 
@@ -125,12 +124,6 @@ function StyxAppContent({ currentUser }) {
     if (activeAccountId === id) setActiveAccount(null)
   }
 
-  // Group accounts by provider
-  const grouped = accounts.reduce((acc, a) => {
-    if (!acc[a.providerId]) acc[a.providerId] = []
-    acc[a.providerId].push(a)
-    return acc
-  }, {})
 
   const activeAccount = accounts.find(a => a.id === activeAccountId)
 
@@ -315,67 +308,60 @@ function StyxAppContent({ currentUser }) {
               <p style={{ fontSize: '0.8rem' }}>Nenhuma nuvem conectada</p>
             </div>
           ) : (
-            Object.entries(grouped).map(([providerId, provAccounts]) => {
-              const cfg        = PROVIDER_CONFIG[providerId] || {}
-              const isExpanded = expandedGroups[providerId] !== false
-              return (
-                <div key={providerId}>
-                  <button
-                    onClick={() => setExpandedGroups(prev => ({ ...prev, [providerId]: !isExpanded }))}
-                    style={{ width: '100%', background: 'none', border: 'none', padding: '0.4rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: 0.6 }}
+            <Reorder.Group 
+              axis="y" 
+              values={accounts} 
+              onReorder={(newOrder) => CloudManager.reorderAccounts(newOrder)} 
+              style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+            >
+              {accounts.map(acc => {
+                const cfg = PROVIDER_CONFIG[acc.providerId] || {}
+                return (
+                  <Reorder.Item 
+                    key={acc.id} 
+                    value={acc}
+                    style={{ position: 'relative' }}
                   >
-                    {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                    <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                      {cfg.label || providerId}
-                    </span>
-                  </button>
-
-                  <AnimatePresence>
-                    {isExpanded && provAccounts.map(acc => (
-                      <motion.div
-                        key={acc.id}
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        style={{ overflow: 'hidden' }}
-                      >
-                        <div
-                          onClick={() => { setActiveAccount(acc.id); closeSidebar() }}
-                          className={`account-item ${activeAccountId === acc.id ? 'active' : ''}`}
-                          style={{ borderColor: activeAccountId === acc.id ? `${cfg.color}66` : 'transparent' }}
-                        >
-                          {acc.photo
-                            ? <img src={acc.photo} alt="" style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }} />
-                            : <ProviderBadge providerId={acc.providerId} />
-                          }
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ fontSize: '0.78rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {acc.name}
-                            </p>
-                            <p style={{ fontSize: '0.65rem', opacity: 0.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {acc.email}
-                            </p>
-                            {acc.quota?.total > 0 && (
-                              <div style={{ marginTop: '0.35rem' }}>
-                                <StorageBar used={acc.quota.used} total={acc.quota.total} color={cfg.color} />
-                              </div>
-                            )}
+                    <div
+                      onClick={() => { setActiveAccount(acc.id); closeSidebar() }}
+                      className={`account-item ${activeAccountId === acc.id ? 'active' : ''}`}
+                      style={{ borderColor: activeAccountId === acc.id ? `${cfg.color}66` : 'transparent', cursor: 'grab' }}
+                      title="Arraste para reordenar"
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.3, marginRight: '-0.2rem', marginLeft: '-0.3rem', cursor: 'grab' }}>
+                        <GripVertical size={14} />
+                      </div>
+                      {acc.photo
+                        ? <img src={acc.photo} alt="" style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, pointerEvents: 'none' }} />
+                        : <ProviderBadge providerId={acc.providerId} />
+                      }
+                      <div style={{ flex: 1, minWidth: 0, pointerEvents: 'none' }}>
+                        <p style={{ fontSize: '0.78rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {acc.name}
+                        </p>
+                        <p style={{ fontSize: '0.65rem', opacity: 0.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {acc.email}
+                        </p>
+                        {acc.quota?.total > 0 && (
+                          <div style={{ marginTop: '0.35rem' }}>
+                            <StorageBar used={acc.quota.used} total={acc.quota.total} color={cfg.color} />
                           </div>
-                          <button
-                            onClick={e => { e.stopPropagation(); disconnectAccount(acc.id) }}
-                            title="Desconectar"
-                            style={{ background: 'none', border: 'none', padding: '0.25rem', opacity: 0.3, flexShrink: 0 }}
-                            className="disconnect-btn"
-                          >
-                            <LogOut size={13} />
-                          </button>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
-              )
-            })
+                        )}
+                      </div>
+                      <button
+                        onClick={e => { e.stopPropagation(); disconnectAccount(acc.id) }}
+                        title="Desconectar"
+                        style={{ background: 'none', border: 'none', padding: '0.25rem', opacity: 0.3, flexShrink: 0 }}
+                        className="disconnect-btn"
+                        onPointerDown={e => e.stopPropagation()}
+                      >
+                        <LogOut size={13} />
+                      </button>
+                    </div>
+                  </Reorder.Item>
+                )
+              })}
+            </Reorder.Group>
           )}
         </div>
 

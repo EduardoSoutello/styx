@@ -306,6 +306,12 @@ class CloudManagerClass {
     this._notify()
   }
 
+  /** Reorder accounts array (for drag-and-drop) */
+  reorderAccounts(newAccounts) {
+    this._accounts = [...newAccounts]
+    this._notify()
+  }
+
   /** Refresh quota for an account */
   async refreshQuota(accountId) {
     const acc = this._accounts.find(a => a.id === accountId)
