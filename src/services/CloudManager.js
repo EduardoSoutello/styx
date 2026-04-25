@@ -25,10 +25,12 @@ const BASE_KEY = 'styx_accounts'
 
 function serialiseAccount(acc) {
   const { session, ...rest } = acc
-  const safeSession = session
-    ? { ...session, _client: undefined }
-    : null
-  return { ...rest, session: safeSession }
+  let safeSession = null
+  if (session) {
+    safeSession = { ...session }
+    delete safeSession._client
+  }
+  return JSON.parse(JSON.stringify({ ...rest, session: safeSession }))
 }
 
 function loadAccounts(uid) {
