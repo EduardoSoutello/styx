@@ -97,8 +97,8 @@ export const MegaProvider = {
     if (!node) throw new Error('MEGA file not found')
 
     return new Promise((resolve, reject) => {
-      // Pass 'true' to include the decryption key in the URL!
-      node.link(true, (err, url) => {
+      // noKey: false ensures the decryption key is included in the URL
+      node.link({ noKey: false }, (err, url) => {
         if (err) reject(err)
         else resolve({ url, isMegaUrl: true })
       })
