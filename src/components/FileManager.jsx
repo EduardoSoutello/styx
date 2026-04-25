@@ -388,46 +388,6 @@ export default function FileManager({ accountId }) {
                   onOpen={handleFileOpen}
                   onDelete={handleDelete}
                   onRename={handleRename}
-        )}
-
-        {/* Error */}
-        {error && (
-          <div style={{ background: 'rgba(255,68,68,0.1)', border: '1px solid rgba(255,68,68,0.3)', borderRadius: 12, padding: '0.75rem 1rem', fontSize: '0.82rem', color: '#ff6666' }}>
-            {error}
-          </div>
-        )}
-
-        {/* ── Content area ── */}
-        {loading && files.length === 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '0.75rem', opacity: 0.4 }}>
-            <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} />
-            <span>Carregando arquivos…</span>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '0.5rem', opacity: 0.3 }}>
-            <FolderPlus size={48} />
-            <p style={{ fontSize: '0.9rem' }}>{search ? 'Nenhum resultado' : 'Pasta vazia'}</p>
-          </div>
-        ) : (
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={viewMode + currentFolderId}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className={viewMode === 'grid' ? 'file-grid' : 'file-list'}
-            >
-              {/* Folders first */}
-              {filtered
-                .sort((a, b) => (a.type === 'folder' ? -1 : 1) - (b.type === 'folder' ? -1 : 1) || a.name.localeCompare(b.name))
-                .map(file => (
-                  <FileCard
-                    key={file.id}
-                    file={file}
-                    viewMode={viewMode}
-                    onOpen={handleFileOpen}
-                    onDelete={handleDelete}
-                    onRename={handleRename}
                   />
                 ))
               }
