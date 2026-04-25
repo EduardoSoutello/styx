@@ -209,11 +209,14 @@ export default function FileManager({ accountId }) {
     const authParam = account.session || account.token
     try {
       // Always await — MEGA and OneDrive return async URLs
-      const url = await Promise.resolve(provider.getDownloadUrl(authParam, file.id || file.path))
-      if (!url) return
+      const result = await Promise.resolve(provider.getDownloadUrl(authParam, file.id || file.path))
+      if (!result) return
 
-      const isImage = file.mimeType?.startsWith('image/') ||
-        /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(file.name)
+      const url = typeof result === 'string' ? result : result.url
+      const isMegaUrl = typeof result === 'object' && result.isMegaUrl
+
+      const isImage = !isMegaUrl && (file.mimeType?.startsWith('image/') ||
+        /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(file.name))
 
       if (isImage) {
         setImagePreview({ url, name: file.name })
