@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { CloudManager } from '../services/CloudManager'
 import FileCard from './FileCard'
+import TransferModal from './TransferModal'
 
 // ── Image Lightbox ────────────────────────────────────────────────────────────
 
@@ -95,8 +96,48 @@ function ImageLightbox({ preview, onClose }) {
 
 function ReauthScreen({ account }) {
   const [password, setPassword] = useState('')
-  const [loading, setLoading]   = useState(false)
+  const [loading, setLoading]   = useState(true) // Start loading for silent auth
   const [error, setError]       = useState('')
+  const [showForm, setShowForm] = useState(false)
+
+  // Try silent login on mount
+  useEffect(() => {
+    let isMounted = true
+    async function trySilentLogin() {
+      try {
+        const { decryptPassword } = await import('../services/CloudManager')
+        // We use the account's unique id part (email) or the global UID from CloudManager.
+        // Actually we just import the current CloudManager's UID instance but we can't easily.
+        // Let's just try to decrypt using CloudManager's current internal logic:
+        const { CloudManager } = await import('../services/CloudManager')
+        const uid = CloudManager._uid
+        
+        const decrypted = await decryptPassword(uid, account._encryptedMegaPassword)
+        if (decrypted && isMounted) {
+          await CloudManager.connectMega(account.email, decrypted)
+          // If successful, CloudManager updates the account and this screen unmounts naturally
+        } else {
+          if (isMounted) {
+            setLoading(false)
+            setShowForm(true)
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
+          setLoading(false)
+          setShowForm(true)
+        }
+      }
+    }
+    
+    if (account._encryptedMegaPassword) {
+      trySilentLogin()
+    } else {
+      setLoading(false)
+      setShowForm(true)
+    }
+    return () => { isMounted = false }
+  }, [account])
 
   async function handleReauth(e) {
     e.preventDefault()
@@ -104,6 +145,7 @@ function ReauthScreen({ account }) {
     setLoading(true)
     setError('')
     try {
+      const { CloudManager } = await import('../services/CloudManager')
       await CloudManager.connectMega(account.email, password)
     } catch (err) {
       setError(err.message)
@@ -120,28 +162,42 @@ function ReauthScreen({ account }) {
         style={{ maxWidth: 400, width: '100%', textAlign: 'center' }}
       >
         <div style={{ width: 48, height: 48, borderRadius: '12px', background: 'rgba(217,39,46,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="#D9272E"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.836 17.52h-2.52V10.15l-3.3 5.48h-.033l-3.3-5.48v7.37H6.164V6.48h2.693l3.143 5.358 3.143-5.358h2.693v11.04z"/></svg>
+          {loading && !showForm ? (
+            <Loader2 size={24} color="#D9272E" style={{ animation: 'spin 1s linear infinite' }} />
+          ) : (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="#D9272E"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.836 17.52h-2.52V10.15l-3.3 5.48h-.033l-3.3-5.48v7.37H6.164V6.48h2.693l3.143 5.358 3.143-5.358h2.693v11.04z"/></svg>
+          )}
         </div>
-        <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Sessão Expirada</h3>
-        <p style={{ fontSize: '0.85rem', opacity: 0.6, marginBottom: '1.5rem', lineHeight: 1.5 }}>
-          Por segurança, o MEGA não permite salvar a sessão permanentemente. Digite a senha para <strong>{account.email}</strong> para continuar.
-        </p>
+        
+        {loading && !showForm ? (
+          <>
+            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Restaurando sessão...</h3>
+            <p style={{ fontSize: '0.85rem', opacity: 0.6, marginBottom: '1.5rem' }}>Conectando ao MEGA de forma segura.</p>
+          </>
+        ) : (
+          <>
+            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Sessão Expirada</h3>
+            <p style={{ fontSize: '0.85rem', opacity: 0.6, marginBottom: '1.5rem', lineHeight: 1.5 }}>
+              Por segurança, o MEGA não permite salvar a sessão permanentemente. Digite a senha para <strong>{account.email}</strong> para continuar.
+            </p>
 
-        <form onSubmit={handleReauth} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div className="input-group">
-            <input
-              type="password"
-              placeholder="Senha do MEGA"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              autoFocus
-            />
-          </div>
-          {error && <p style={{ color: '#ff4444', fontSize: '0.8rem', textAlign: 'left' }}>{error}</p>}
-          <button className="primary" type="submit" disabled={!password || loading} style={{ justifyContent: 'center', padding: '0.75rem' }}>
-            {loading ? <span className="spin-small" /> : 'Reconectar'}
-          </button>
-        </form>
+            <form onSubmit={handleReauth} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="input-group">
+                <input
+                  type="password"
+                  placeholder="Senha do MEGA"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              {error && <p style={{ color: '#ff4444', fontSize: '0.8rem', textAlign: 'left' }}>{error}</p>}
+              <button className="primary" type="submit" disabled={!password || loading} style={{ justifyContent: 'center', padding: '0.75rem' }}>
+                {loading ? <span className="spin-small" /> : 'Reconectar'}
+              </button>
+            </form>
+          </>
+        )}
       </motion.div>
     </div>
   )
@@ -159,6 +215,7 @@ export default function FileManager({ accountId }) {
   const [uploading,   setUploading]   = useState(false)
   const [uploadPct,   setUploadPct]   = useState(0)
   const [imagePreview, setImagePreview] = useState(null) // { url, name }
+  const [transferFile, setTransferFile] = useState(null) // file object to transfer
 
   const account  = CloudManager.accounts.find(a => a.id === accountId)
   const provider = account ? CloudManager.getProvider(accountId) : null
@@ -209,7 +266,7 @@ export default function FileManager({ accountId }) {
     const authParam = account.session || account.token
     try {
       // Always await — MEGA and OneDrive return async URLs
-      const result = await Promise.resolve(provider.getDownloadUrl(authParam, file.id || file.path))
+      const result = await Promise.resolve(provider.getDownloadUrl(authParam, file.id || file.path, file))
       if (!result) return
 
       const url = typeof result === 'string' ? result : result.url
@@ -388,16 +445,26 @@ export default function FileManager({ accountId }) {
                   onOpen={handleFileOpen}
                   onDelete={handleDelete}
                   onRename={handleRename}
-                  />
-                ))
-              }
-            </motion.div>
-          </AnimatePresence>
-        )}
+                  onTransfer={setTransferFile}
+                />
+              ))
+            }
+          </motion.div>
+        </AnimatePresence>
+      )}
       </div>
 
       {/* Image lightbox */}
       <ImageLightbox preview={imagePreview} onClose={() => setImagePreview(null)} />
+      
+      {/* Transfer modal */}
+      {transferFile && (
+        <TransferModal
+          file={transferFile}
+          sourceAccountId={accountId}
+          onClose={() => setTransferFile(null)}
+        />
+      )}
     </>
   )
 }

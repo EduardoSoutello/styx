@@ -137,5 +137,18 @@ export const DropboxProvider = {
 
   async renameFile(token, fromPath, toPath) {
     return dbxPost(token, '/files/move_v2', { from_path: fromPath, to_path: toPath })
+  },
+
+  /** Get file as Blob */
+  async getFileBlob(token, path) {
+    const res = await fetch('https://content.dropboxapi.com/2/files/download', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Dropbox-API-Arg': JSON.stringify({ path })
+      }
+    })
+    if (!res.ok) throw new Error('Download failed')
+    return res.blob()
   }
 }

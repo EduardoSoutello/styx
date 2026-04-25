@@ -126,5 +126,49 @@ export const MegaProvider = {
         else resolve()
       })
     })
+  },
+
+  /** Upload a file */
+  async uploadFile(session, file, parentNodeId = null, onProgress) {
+    const storage = session._client
+    if (!storage) throw new Error('MEGA session invalid')
+    const parent = parentNodeId ? storage.files[parentNodeId] : storage.root
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const buffer = new Uint8Array(reader.result)
+        // megajs upload with buffer
+        const stream = parent.upload({ name: file.name, size: file.size }, buffer, (err, uploadedNode) => {
+          if (err) reject(err)
+          else resolve(uploadedNode)
+        })
+        
+        // Try to hook into stream progress if supported
+        if (stream && onProgress) {
+          stream.on('progress', (info) => {
+            if (info && info.bytesLoaded && file.size) {
+              onProgress(info.bytesLoaded / file.size)
+            }
+          })
+        }
+      }
+      reader.onerror = () => reject(new Error('Falha ao ler arquivo local'))
+      reader.readAsArrayBuffer(file)
+    })
+  },
+
+  /** Get file as Blob (for cross-cloud transfer) */
+  async getFileBlob(session, nodeId) {
+    const storage = session._client
+    const node = storage.files[nodeId]
+    if (!node) throw new Error('MEGA file not found')
+    
+    return new Promise((resolve, reject) => {
+      node.downloadBuffer((err, buffer) => {
+        if (err) reject(err)
+        else resolve(new Blob([buffer], { type: 'application/octet-stream' }))
+      })
+    })
   }
 }

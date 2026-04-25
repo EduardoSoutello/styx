@@ -52,6 +52,58 @@ function saveAccounts(accounts, uid) {
   localStorage.setItem(key, JSON.stringify(accounts.map(serialiseAccount)))
 }
 
+// ── Crypto Utilities for MEGA Auto-Login ─────────────────────────────────────
+// Uses Firebase UID to derive a key for AES-GCM local storage encryption
+
+async function getCryptoKey(uid) {
+  const saltStr = uid || 'styx_default_salt_123'
+  const enc = new TextEncoder()
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', enc.encode(saltStr),
+    'PBKDF2', false, ['deriveKey']
+  )
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode('styx_mega_crypto_salt'), iterations: 100000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false, ['encrypt', 'decrypt']
+  )
+}
+
+async function encryptPassword(uid, password) {
+  if (!password) return null
+  try {
+    const key = await getCryptoKey(uid)
+    const iv = crypto.getRandomValues(new Uint8Array(12))
+    const encoded = new TextEncoder().encode(password)
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded)
+    
+    const combined = new Uint8Array(iv.length + ciphertext.byteLength)
+    combined.set(iv)
+    combined.set(new Uint8Array(ciphertext), iv.length)
+    return btoa(String.fromCharCode(...combined))
+  } catch (e) {
+    console.error('Failed to encrypt MEGA password', e)
+    return null
+  }
+}
+
+export async function decryptPassword(uid, encryptedB64) {
+  if (!encryptedB64) return null
+  try {
+    const key = await getCryptoKey(uid)
+    const combined = new Uint8Array(atob(encryptedB64).split('').map(c => c.charCodeAt(0)))
+    const iv = combined.slice(0, 12)
+    const ciphertext = combined.slice(12)
+    const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext)
+    return new TextDecoder().decode(decrypted)
+  } catch (e) {
+    console.error('Failed to decrypt MEGA password', e)
+    return null
+  }
+}
+
+
 // ── CloudManager ─────────────────────────────────────────────────────────────
 
 class CloudManagerClass {
@@ -181,6 +233,9 @@ class CloudManagerClass {
     // Fetch quota while session is live (right after login)
     const quota = await provider.getQuota(session).catch(() => ({ used: 0, total: 0 }))
 
+    // Encrypt password for silent re-auth
+    const encryptedPass = await encryptPassword(this._uid, password)
+
     const account = {
       id: `mega_${email}`,
       providerId: 'mega',
@@ -190,7 +245,8 @@ class CloudManagerClass {
       token: null,
       session,
       quota,
-      connectedAt: Date.now()
+      connectedAt: Date.now(),
+      _encryptedMegaPassword: encryptedPass
     }
 
     const existing = this._accounts.findIndex(a => a.id === account.id)
@@ -236,6 +292,48 @@ class CloudManagerClass {
   getProvider(accountId) {
     const acc = this._accounts.find(a => a.id === accountId)
     return acc ? PROVIDERS[acc.providerId] : null
+  }
+
+  /** Transfer a file from one cloud to another */
+  async transferFile(sourceId, targetId, file, targetFolderId, onProgress) {
+    const sourceAcc = this._accounts.find(a => a.id === sourceId)
+    const targetAcc = this._accounts.find(a => a.id === targetId)
+    if (!sourceAcc || !targetAcc) throw new Error('Account not found')
+
+    const sourceProvider = PROVIDERS[sourceAcc.providerId]
+    const targetProvider = PROVIDERS[targetAcc.providerId]
+
+    if (!sourceProvider.getFileBlob || !targetProvider.uploadFile) {
+      throw new Error('Provider does not support direct transfer')
+    }
+
+    onProgress?.(0.1) // Start download
+
+    try {
+      // 1. Download to Blob
+      const blob = await sourceProvider.getFileBlob(sourceAcc.session || sourceAcc.token, file.id || file.path, file)
+      
+      onProgress?.(0.5) // Download complete, start upload
+      
+      // Convert Blob to File object for upload
+      const transferFileObj = new File([blob], file.name, { type: file.mimeType || blob.type })
+      
+      // 2. Upload to target
+      await targetProvider.uploadFile(
+        targetAcc.session || targetAcc.token, 
+        transferFileObj, 
+        targetFolderId, 
+        (pct) => {
+          // Scale upload progress from 50% to 100%
+          onProgress?.(0.5 + (pct * 0.5))
+        }
+      )
+
+      onProgress?.(1.0)
+    } catch (e) {
+      console.error('Transfer failed', e)
+      throw new Error('A transferência falhou: ' + e.message)
+    }
   }
 }
 

@@ -50,7 +50,7 @@ export const GoogleDriveProvider = {
   /** List files in a folder */
   async listFiles(token, folderId = null) {
     const folder = folderId || 'root'
-    const fields = 'files(id,name,mimeType,size,modifiedTime,parents,iconLink,thumbnailLink)'
+    const fields = 'files(id,name,mimeType,size,modifiedTime,parents,iconLink,thumbnailLink,webContentLink)'
     const data = await driveGet(token, '/files', {
       q: `'${folder}' in parents and trashed = false`,
       fields,
@@ -92,7 +92,19 @@ export const GoogleDriveProvider = {
   },
 
   /** Download URL for a file */
-  getDownloadUrl(token, fileId) {
+  getDownloadUrl(token, fileId, fileObj) {
+    if (fileObj?.raw) {
+      const isImage = fileObj.mimeType?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(fileObj.name)
+      if (isImage && fileObj.raw.thumbnailLink) {
+        // Use high-res thumbnail for image preview to avoid CORS block
+        return fileObj.raw.thumbnailLink.replace(/=s\d+/, '=s1200')
+      }
+      if (fileObj.raw.webContentLink) {
+        // webContentLink is Google's official direct download URL
+        return fileObj.raw.webContentLink
+      }
+    }
+    // Fallback if no file object or links
     return `${BASE}/files/${fileId}?alt=media&access_token=${token}`
   },
 
@@ -134,5 +146,13 @@ export const GoogleDriveProvider = {
       xhr.onerror = () => reject(new Error('Upload network error'))
       xhr.send(form)
     })
+  },
+
+  /** Get file as Blob (for cross-cloud transfer) */
+  async getFileBlob(token, fileId) {
+    const url = `${BASE}/files/${fileId}?alt=media`
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!res.ok) throw new Error('Download failed')
+    return res.blob()
   }
 }

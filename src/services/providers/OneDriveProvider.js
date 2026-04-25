@@ -150,5 +150,14 @@ export const OneDriveProvider = {
 
   async renameFile(token, itemId, newName) {
     return graphRequest(token, 'PATCH', `/me/drive/items/${itemId}`, { name: newName })
+  },
+
+  /** Get file as Blob */
+  async getFileBlob(token, itemId) {
+    const res = await fetch(`${BASE}/me/drive/items/${itemId}/content`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error('Download failed')
+    return res.blob()
   }
 }
