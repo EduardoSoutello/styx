@@ -2,10 +2,96 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutGrid, List, Upload, FolderPlus, ChevronRight,
-  Home, Loader2, RefreshCw, Search, CloudOff
+  Home, Loader2, RefreshCw, Search, CloudOff, X, Download
 } from 'lucide-react'
 import { CloudManager } from '../services/CloudManager'
 import FileCard from './FileCard'
+
+// ── Image Lightbox ────────────────────────────────────────────────────────────
+
+function ImageLightbox({ preview, onClose }) {
+  // Close on Escape key
+  useEffect(() => {
+    const handler = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  if (!preview) return null
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 2000,
+          background: 'rgba(0,0,0,0.88)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '1.5rem',
+        }}
+      >
+        {/* Controls */}
+        <div
+          style={{ position: 'absolute', top: '1rem', right: '1rem', display: 'flex', gap: '0.5rem' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <a
+            href={preview.url}
+            download={preview.name}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.4rem',
+              padding: '0.5rem 0.9rem', borderRadius: '10px',
+              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+              color: 'white', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none',
+            }}
+          >
+            <Download size={14} /> Download
+          </a>
+          <button
+            onClick={onClose}
+            style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', padding: '0.5rem' }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Image */}
+        <motion.img
+          initial={{ scale: 0.92, opacity: 0 }}
+          animate={{ scale: 1,    opacity: 1 }}
+          transition={{ duration: 0.25 }}
+          src={preview.url}
+          alt={preview.name}
+          onClick={e => e.stopPropagation()}
+          style={{
+            maxWidth: '90vw', maxHeight: '85vh',
+            objectFit: 'contain',
+            borderRadius: '12px',
+            boxShadow: '0 32px 80px rgba(0,0,0,0.8)',
+          }}
+          onError={e => { e.target.style.display = 'none' }}
+        />
+
+        {/* File name */}
+        <p style={{
+          position: 'absolute', bottom: '1.25rem', left: '50%', transform: 'translateX(-50%)',
+          fontSize: '0.8rem', opacity: 0.5, whiteSpace: 'nowrap', maxWidth: '80vw',
+          overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {preview.name}
+        </p>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
+// ── FileManager ───────────────────────────────────────────────────────────────
 
 export default function FileManager({ accountId }) {
   const [files,       setFiles]       = useState([])
@@ -16,6 +102,7 @@ export default function FileManager({ accountId }) {
   const [breadcrumb,  setBreadcrumb]  = useState([])      // [{id, name}, ...]
   const [uploading,   setUploading]   = useState(false)
   const [uploadPct,   setUploadPct]   = useState(0)
+  const [imagePreview, setImagePreview] = useState(null) // { url, name }
 
   const account  = CloudManager.accounts.find(a => a.id === accountId)
   const provider = account ? CloudManager.getProvider(accountId) : null
@@ -59,16 +146,26 @@ export default function FileManager({ accountId }) {
     }
   }
 
-  function handleFileOpen(file) {
-    if (file.type === 'folder') {
-      openFolder(file)
-    } else {
-      // Open download URL
-      if (provider && account) {
-        const authParam = account.session || account.token
-        const url = provider.getDownloadUrl(authParam, file.id || file.path)
-        window.open(url, '_blank')
+  async function handleFileOpen(file) {
+    if (file.type === 'folder') { openFolder(file); return }
+    if (!provider || !account || !provider.getDownloadUrl) return
+
+    const authParam = account.session || account.token
+    try {
+      // Always await — MEGA and OneDrive return async URLs
+      const url = await Promise.resolve(provider.getDownloadUrl(authParam, file.id || file.path))
+      if (!url) return
+
+      const isImage = file.mimeType?.startsWith('image/') ||
+        /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(file.name)
+
+      if (isImage) {
+        setImagePreview({ url, name: file.name })
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer')
       }
+    } catch (e) {
+      setError(`Não foi possível abrir o arquivo: ${e.message}`)
     }
   }
 
@@ -122,7 +219,8 @@ export default function FileManager({ accountId }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '1rem' }}>
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '1rem' }}>
 
       {/* ── Toolbar ── */}
       <div className="fm-toolbar">
@@ -227,12 +325,56 @@ export default function FileManager({ accountId }) {
                   onOpen={handleFileOpen}
                   onDelete={handleDelete}
                   onRename={handleRename}
-                />
-              ))
-            }
-          </motion.div>
-        </AnimatePresence>
-      )}
-    </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div style={{ background: 'rgba(255,68,68,0.1)', border: '1px solid rgba(255,68,68,0.3)', borderRadius: 12, padding: '0.75rem 1rem', fontSize: '0.82rem', color: '#ff6666' }}>
+            {error}
+          </div>
+        )}
+
+        {/* ── Content area ── */}
+        {loading && files.length === 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '0.75rem', opacity: 0.4 }}>
+            <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} />
+            <span>Carregando arquivos…</span>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '0.5rem', opacity: 0.3 }}>
+            <FolderPlus size={48} />
+            <p style={{ fontSize: '0.9rem' }}>{search ? 'Nenhum resultado' : 'Pasta vazia'}</p>
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={viewMode + currentFolderId}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className={viewMode === 'grid' ? 'file-grid' : 'file-list'}
+            >
+              {/* Folders first */}
+              {filtered
+                .sort((a, b) => (a.type === 'folder' ? -1 : 1) - (b.type === 'folder' ? -1 : 1) || a.name.localeCompare(b.name))
+                .map(file => (
+                  <FileCard
+                    key={file.id}
+                    file={file}
+                    viewMode={viewMode}
+                    onOpen={handleFileOpen}
+                    onDelete={handleDelete}
+                    onRename={handleRename}
+                  />
+                ))
+              }
+            </motion.div>
+          </AnimatePresence>
+        )}
+      </div>
+
+      {/* Image lightbox */}
+      <ImageLightbox preview={imagePreview} onClose={() => setImagePreview(null)} />
+    </>
   )
 }
