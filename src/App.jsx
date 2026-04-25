@@ -12,6 +12,7 @@ import ProviderBadge, { PROVIDER_CONFIG } from './components/ProviderBadge'
 import StorageBar from './components/StorageBar'
 import AuthScreen from './components/auth/AuthScreen'
 import EmailVerifyScreen from './components/auth/EmailVerifyScreen'
+import OAuthCallback from './components/auth/OAuthCallback'
 
 // ── Firebase not configured banner ───────────────────────────────────────────
 
@@ -108,15 +109,13 @@ function StyxAppContent({ currentUser }) {
   async function handleConnectDropbox() {
     const { getDropboxAuthUrl } = await import('./services/providers/DropboxProvider')
     const url = await getDropboxAuthUrl()
-    window.open(url, '_blank', 'width=600,height=700')
-    alert('Complete a autorização no popup e aguarde. (Callback handler a implementar)')
+    window.location.href = url
   }
 
   async function handleConnectOneDrive() {
     const { getOneDriveAuthUrl } = await import('./services/providers/OneDriveProvider')
     const url = await getOneDriveAuthUrl()
-    window.open(url, '_blank', 'width=600,height=700')
-    alert('Complete a autorização no popup e aguarde. (Callback handler a implementar)')
+    window.location.href = url
   }
 
   function disconnectAccount(id) {
@@ -550,6 +549,12 @@ function App({ clientId }) {
         </div>
       </div>
     )
+  }
+
+  // Intercept OAuth callback
+  if (window.location.pathname.startsWith('/auth/')) {
+    const provider = window.location.pathname.split('/')[2]
+    return <OAuthCallback provider={provider} />
   }
 
   return (

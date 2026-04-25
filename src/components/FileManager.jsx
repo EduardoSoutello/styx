@@ -230,7 +230,12 @@ export default function FileManager({ accountId }) {
       const result = await CloudManager.listFiles(accountId, folderId)
       setFiles(result)
     } catch (e) {
-      setError(e.message)
+      const msg = e.message || ''
+      if (msg.includes('invalid authentication credentials') || msg.includes('401')) {
+        setError('Sua sessão expirou por segurança. Por favor, desconecte a conta na barra lateral e conecte novamente.')
+      } else {
+        setError(msg)
+      }
     } finally {
       setLoading(false)
     }

@@ -7,6 +7,8 @@ import { GoogleDriveProvider } from './providers/GoogleDriveProvider'
 import { DropboxProvider } from './providers/DropboxProvider'
 import { OneDriveProvider } from './providers/OneDriveProvider'
 import { MegaProvider } from './providers/MegaProvider'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { db } from '../firebase'
 
 export const PROVIDERS = {
   googledrive: GoogleDriveProvider,
@@ -118,6 +120,36 @@ class CloudManagerClass {
     this._uid      = uid
     this._accounts = loadAccounts(uid)
     this._listeners.forEach(fn => fn([...this._accounts]))
+
+    if (uid && db) {
+      this._syncFromFirestore(uid).catch(err => {
+        console.error('Failed to sync from Firestore', err)
+      })
+    }
+  }
+
+  async _syncFromFirestore(uid) {
+    const docRef = doc(db, 'users', uid)
+    const snapshot = await getDoc(docRef)
+    if (snapshot.exists()) {
+      const data = snapshot.data()
+      if (data && data.accounts) {
+        const remoteAccounts = data.accounts.map(acc => {
+          if (acc.providerId === 'mega') {
+            acc.needsReauth = true
+            const local = this._accounts.find(a => a.id === acc.id)
+            if (local && local.session && local.session._client) {
+               acc.session = local.session
+               acc.needsReauth = false
+            }
+          }
+          return acc
+        })
+        this._accounts = remoteAccounts
+        saveAccounts(this._accounts, this._uid)
+        this._listeners.forEach(fn => fn([...this._accounts]))
+      }
+    }
   }
 
   /** All registered accounts */
@@ -131,6 +163,15 @@ class CloudManagerClass {
 
   _notify() {
     saveAccounts(this._accounts, this._uid)
+    
+    if (this._uid && db) {
+      const docRef = doc(db, 'users', this._uid)
+      const serialized = this._accounts.map(serialiseAccount)
+      setDoc(docRef, { accounts: serialized }, { merge: true }).catch(err => {
+        console.error('Failed to save to Firestore', err)
+      })
+    }
+
     this._listeners.forEach(fn => fn([...this._accounts]))
   }
 
