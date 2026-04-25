@@ -91,6 +91,62 @@ function ImageLightbox({ preview, onClose }) {
   )
 }
 
+// ── Reauth Screen ───────────────────────────────────────────────────────────────
+
+function ReauthScreen({ account }) {
+  const [password, setPassword] = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState('')
+
+  async function handleReauth(e) {
+    e.preventDefault()
+    if (!password) return
+    setLoading(true)
+    setError('')
+    try {
+      await CloudManager.connectMega(account.email, password)
+    } catch (err) {
+      setError(err.message)
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="card"
+        style={{ maxWidth: 400, width: '100%', textAlign: 'center' }}
+      >
+        <div style={{ width: 48, height: 48, borderRadius: '12px', background: 'rgba(217,39,46,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="#D9272E"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.836 17.52h-2.52V10.15l-3.3 5.48h-.033l-3.3-5.48v7.37H6.164V6.48h2.693l3.143 5.358 3.143-5.358h2.693v11.04z"/></svg>
+        </div>
+        <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Sessão Expirada</h3>
+        <p style={{ fontSize: '0.85rem', opacity: 0.6, marginBottom: '1.5rem', lineHeight: 1.5 }}>
+          Por segurança, o MEGA não permite salvar a sessão permanentemente. Digite a senha para <strong>{account.email}</strong> para continuar.
+        </p>
+
+        <form onSubmit={handleReauth} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div className="input-group">
+            <input
+              type="password"
+              placeholder="Senha do MEGA"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              autoFocus
+            />
+          </div>
+          {error && <p style={{ color: '#ff4444', fontSize: '0.8rem', textAlign: 'left' }}>{error}</p>}
+          <button className="primary" type="submit" disabled={!password || loading} style={{ justifyContent: 'center', padding: '0.75rem' }}>
+            {loading ? <span className="spin-small" /> : 'Reconectar'}
+          </button>
+        </form>
+      </motion.div>
+    </div>
+  )
+}
+
 // ── FileManager ───────────────────────────────────────────────────────────────
 
 export default function FileManager({ accountId }) {
@@ -124,11 +180,11 @@ export default function FileManager({ accountId }) {
   }, [accountId, account])
 
   useEffect(() => {
-    if (accountId) {
+    if (accountId && !account?.needsReauth) {
       setBreadcrumb([])
       loadFiles(null)
     }
-  }, [accountId, loadFiles])
+  }, [accountId, loadFiles, account?.needsReauth])
 
   function openFolder(folder) {
     setBreadcrumb(prev => [...prev, { id: folder.id, name: folder.name }])
@@ -216,6 +272,10 @@ export default function FileManager({ accountId }) {
         <p>Selecione uma conta na sidebar</p>
       </div>
     )
+  }
+
+  if (account.needsReauth) {
+    return <ReauthScreen account={account} />
   }
 
   return (
