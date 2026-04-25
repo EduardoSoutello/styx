@@ -15,7 +15,7 @@ export const PROVIDERS = {
   mega:        MegaProvider
 }
 
-const STORAGE_KEY = 'styx_accounts'
+const BASE_KEY = 'styx_accounts'
 
 // ── Serialise / deserialise ───────────────────────────────────────────────────
 // We can't store MEGA's live _client in localStorage, so we strip it on save
@@ -29,9 +29,10 @@ function serialiseAccount(acc) {
   return { ...rest, session: safeSession }
 }
 
-function loadAccounts() {
+function loadAccounts(uid) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const key = uid ? `${BASE_KEY}_${uid}` : BASE_KEY
+    const raw = localStorage.getItem(key)
     if (!raw) return []
     return JSON.parse(raw).map(acc => {
       // MEGA sessions are live objects – mark for reauth
@@ -46,16 +47,25 @@ function loadAccounts() {
   }
 }
 
-function saveAccounts(accounts) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts.map(serialiseAccount)))
+function saveAccounts(accounts, uid) {
+  const key = uid ? `${BASE_KEY}_${uid}` : BASE_KEY
+  localStorage.setItem(key, JSON.stringify(accounts.map(serialiseAccount)))
 }
 
 // ── CloudManager ─────────────────────────────────────────────────────────────
 
 class CloudManagerClass {
   constructor() {
-    this._accounts = loadAccounts()
+    this._uid      = null
+    this._accounts = []
     this._listeners = []
+  }
+
+  /** Called by App.jsx when auth state changes */
+  setUser(uid) {
+    this._uid      = uid
+    this._accounts = loadAccounts(uid)
+    this._listeners.forEach(fn => fn([...this._accounts]))
   }
 
   /** All registered accounts */
@@ -68,7 +78,7 @@ class CloudManagerClass {
   }
 
   _notify() {
-    saveAccounts(this._accounts)
+    saveAccounts(this._accounts, this._uid)
     this._listeners.forEach(fn => fn([...this._accounts]))
   }
 
@@ -168,6 +178,7 @@ class CloudManagerClass {
     const provider = PROVIDERS.mega
     const session = await provider.login(email, password)
 
+    // Fetch quota while session is live (right after login)
     const quota = await provider.getQuota(session).catch(() => ({ used: 0, total: 0 }))
 
     const account = {
@@ -176,7 +187,7 @@ class CloudManagerClass {
       email,
       name: session.name || email,
       photo: null,
-      token: null, // MEGA uses session, not token
+      token: null,
       session,
       quota,
       connectedAt: Date.now()
@@ -189,6 +200,7 @@ class CloudManagerClass {
     return account
   }
 
+
   /** Remove an account by id */
   disconnect(accountId) {
     this._accounts = this._accounts.filter(a => a.id !== accountId)
@@ -199,13 +211,15 @@ class CloudManagerClass {
   async refreshQuota(accountId) {
     const acc = this._accounts.find(a => a.id === accountId)
     if (!acc) return
+    // Skip MEGA accounts that lost their live session on page reload
+    if (acc.providerId === 'mega' && acc.needsReauth) return
     const provider = PROVIDERS[acc.providerId]
     try {
       const authParam = acc.session || acc.token
       acc.quota = await provider.getQuota(authParam)
       this._notify()
     } catch {
-      // fail silently
+      // fail silently — keep existing quota value
     }
   }
 

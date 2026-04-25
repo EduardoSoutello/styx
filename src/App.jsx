@@ -1,53 +1,103 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, X, LogOut, Cloud, Settings, ChevronDown, ChevronRight, Home } from 'lucide-react'
+import { Plus, X, LogOut, Cloud, Settings, ChevronDown, ChevronRight, Home, User } from 'lucide-react'
 import { useGoogleLogin, googleLogout, GoogleOAuthProvider } from '@react-oauth/google'
 import { CloudManager } from './services/CloudManager'
+import { onAuthStateChanged, signOut } from './services/AuthService'
+import { FIREBASE_CONFIGURED } from './firebase'
 import FileManager from './components/FileManager'
 import HomeView from './components/HomeView'
 import ConnectModal from './components/ConnectModal'
 import ProviderBadge, { PROVIDER_CONFIG } from './components/ProviderBadge'
 import StorageBar from './components/StorageBar'
+import AuthScreen from './components/auth/AuthScreen'
+import EmailVerifyScreen from './components/auth/EmailVerifyScreen'
+
+// ── Firebase not configured banner ───────────────────────────────────────────
+
+function FirebaseSetupBanner() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '2rem' }}>
+      <div className="card" style={{ maxWidth: 520, border: '1px solid #eab308', background: 'rgba(234,179,8,0.08)', color: '#eab308' }}>
+        <h2 style={{ fontSize: '1.1rem' }}>⚠️ Firebase não configurado</h2>
+        <p style={{ marginTop: '1rem', color: 'white', opacity: 0.75, fontSize: '0.88rem', lineHeight: 1.7 }}>
+          Para ativar o sistema de login, adicione as variáveis do Firebase no arquivo <code>.env</code>:
+        </p>
+        <pre style={{ marginTop: '1rem', background: 'rgba(0,0,0,0.4)', padding: '1rem', borderRadius: '10px', fontSize: '0.78rem', overflowX: 'auto', lineHeight: 1.8, color: '#94a3b8' }}>
+{`VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...`}
+        </pre>
+        <p style={{ marginTop: '1rem', fontSize: '0.8rem', opacity: 0.6, lineHeight: 1.7 }}>
+          Crie um projeto em <strong style={{ color: '#eab308' }}>console.firebase.google.com</strong>, ative Authentication → Google + Email/Password, e copie as chaves do SDK.
+        </p>
+        <button className="primary" onClick={() => window.location.reload()} style={{ marginTop: '1.5rem', width: '100%', justifyContent: 'center' }}>
+          Recarregar após configurar
+        </button>
+      </div>
+    </div>
+  )
+}
 
 // ── Inner app (needs GoogleOAuthProvider above) ───────────────────────────────
 
-function StyxAppContent() {
-  const [accounts,       setAccounts]       = useState(() => CloudManager.accounts)
-  const [activeAccountId, setActiveAccount] = useState(null)
-  const [showConnect,    setShowConnect]    = useState(false)
-  const [isSidebarOpen,  setIsSidebarOpen]  = useState(false)
-  const [expandedGroups, setExpandedGroups] = useState({})
+function StyxAppContent({ currentUser }) {
+  const [accounts,        setAccounts]       = useState(() => CloudManager.accounts)
+  const [activeAccountId, setActiveAccount]  = useState(null)
+  const [showConnect,     setShowConnect]    = useState(false)
+  const [isSidebarOpen,   setIsSidebarOpen]  = useState(false)
+  const [expandedGroups,  setExpandedGroups] = useState({})
+  const [showDrivePrompt, setShowDrivePrompt] = useState(false)
+  const [drivePromptLoading, setDrivePromptLoading] = useState(false)
 
   // Keep in sync with CloudManager
   useEffect(() => {
     return CloudManager.subscribe(updated => setAccounts([...updated]))
   }, [])
 
-  // Go home (deselect account)
-  const goHome = () => setActiveAccount(null)
+  // Detect: logged in with Google but no Drive account linked yet
+  useEffect(() => {
+    const isGoogleUser = currentUser?.providerData?.some(p => p.providerId === 'google.com')
+    const hasDrive     = accounts.some(
+      a => a.providerId === 'googledrive' && a.email === currentUser?.email
+    )
+    const dismissed    = sessionStorage.getItem('styx_drive_prompt_dismissed')
+    if (isGoogleUser && !hasDrive && !dismissed) {
+      // Small delay so the app settles before showing the prompt
+      const t = setTimeout(() => setShowDrivePrompt(true), 800)
+      return () => clearTimeout(t)
+    } else {
+      setShowDrivePrompt(false)
+    }
+  }, [currentUser, accounts])
 
+  const goHome       = () => setActiveAccount(null)
   const toggleSidebar = () => setIsSidebarOpen(s => !s)
   const closeSidebar  = () => { if (window.innerWidth <= 768) setIsSidebarOpen(false) }
 
-  // ── Google OAuth ──
+  // ── Google OAuth (for Drive cloud account connection) ──
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       try {
         const acc = await CloudManager.connectGoogleDrive(tokenResponse.access_token)
         setActiveAccount(acc.id)
         setShowConnect(false)
+        setShowDrivePrompt(false)
+        setDrivePromptLoading(false)
       } catch (e) {
         console.error('Google Drive connect error:', e)
+        setDrivePromptLoading(false)
       }
     },
     scope: 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
-    onError: e => console.error('Google login failed:', e)
+    onError: e => { console.error('Google login failed:', e); setDrivePromptLoading(false) }
   })
 
-  // ── Connect handlers ──
-  async function handleConnectGoogle() {
-    googleLogin()
-    // ConnectModal will close itself via the onSuccess above
+  async function handleConnectGoogle(hint) {
+    googleLogin(hint ? { login_hint: hint } : undefined)
   }
 
   async function handleConnectMega(email, password) {
@@ -59,7 +109,6 @@ function StyxAppContent() {
     const { getDropboxAuthUrl } = await import('./services/providers/DropboxProvider')
     const url = await getDropboxAuthUrl()
     window.open(url, '_blank', 'width=600,height=700')
-    // Actual token exchange happens in a redirect handler (future)
     alert('Complete a autorização no popup e aguarde. (Callback handler a implementar)')
   }
 
@@ -77,7 +126,7 @@ function StyxAppContent() {
     if (activeAccountId === id) setActiveAccount(null)
   }
 
-  // Group accounts by provider for sidebar rendering
+  // Group accounts by provider
   const grouped = accounts.reduce((acc, a) => {
     if (!acc[a.providerId]) acc[a.providerId] = []
     acc[a.providerId].push(a)
@@ -86,9 +135,95 @@ function StyxAppContent() {
 
   const activeAccount = accounts.find(a => a.id === activeAccountId)
 
+  // User display info
+  const userName  = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Usuário'
+  const userPhoto = currentUser?.photoURL
+
   return (
     <div className="app-container">
       <div className="glow-background" />
+
+      {/* ── Google Drive link prompt ──────────────────────────────────────── */}
+      <AnimatePresence>
+        {showDrivePrompt && (
+          <motion.div
+            initial={{ opacity: 0, y: -16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+            style={{
+              position: 'fixed',
+              top: '1.25rem',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 1100,
+              width: 'calc(100% - 2.5rem)',
+              maxWidth: 520,
+              background: 'rgba(14,16,22,0.96)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(0,242,255,0.2)',
+              borderRadius: '16px',
+              padding: '1rem 1.25rem',
+              boxShadow: '0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,242,255,0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem',
+            }}
+          >
+            {/* Google Drive icon */}
+            <div style={{
+              width: 40, height: 40, borderRadius: '10px', flexShrink: 0,
+              background: 'rgba(0,242,255,0.08)',
+              border: '1px solid rgba(0,242,255,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <svg width="20" height="20" viewBox="0 0 87.3 78" fill="none">
+                <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3L27.5 53H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066DA"/>
+                <path d="M43.65 25L29.9 1.2C28.55 2 27.4 3.1 26.6 4.5L1.2 48.5C.4 49.9 0 51.45 0 53h27.5z" fill="#00AC47"/>
+                <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75L86.1 57.5c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.85 11.5z" fill="#EA4335"/>
+                <path d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z" fill="#00832D"/>
+                <path d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.4 4.5-1.2z" fill="#2684FC"/>
+                <path d="M73.4 26.5l-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25 59.8 53h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#FFBA00"/>
+              </svg>
+            </div>
+
+            {/* Text */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.15rem' }}>
+                Adicionar Google Drive?
+              </p>
+              <p style={{ fontSize: '0.75rem', opacity: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Conectar <strong style={{ opacity: 1, color: 'var(--accent-primary)' }}>{currentUser?.email}</strong> como nuvem
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+              <button
+                onClick={() => {
+                  sessionStorage.setItem('styx_drive_prompt_dismissed', '1')
+                  setShowDrivePrompt(false)
+                }}
+                style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', padding: '0.45rem 0.85rem', fontSize: '0.78rem', opacity: 0.6 }}
+              >
+                Não
+              </button>
+              <button
+                className="primary"
+                disabled={drivePromptLoading}
+                onClick={() => {
+                  setDrivePromptLoading(true)
+                  handleConnectGoogle(currentUser?.email)
+                }}
+                style={{ padding: '0.45rem 0.85rem', fontSize: '0.78rem', gap: '0.4rem' }}
+              >
+                {drivePromptLoading ? <span className="spin-small" /> : null}
+                Adicionar
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Overlay mobile */}
       {isSidebarOpen && (
@@ -107,7 +242,7 @@ function StyxAppContent() {
         <span>STYX</span>
       </button>
 
-      {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
+      {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
       <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
         {/* Logo */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -121,6 +256,47 @@ function StyxAppContent() {
           Gerenciador Multi-Cloud
         </p>
 
+        {/* ── Logged-in user card ── */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.65rem',
+            padding: '0.6rem 0.75rem',
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            borderRadius: '12px',
+          }}
+        >
+          {userPhoto
+            ? <img src={userPhoto} alt="" style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }} />
+            : (
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                background: 'var(--accent-gradient)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <User size={16} />
+              </div>
+            )
+          }
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: '0.78rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {userName}
+            </p>
+            <p style={{ fontSize: '0.64rem', opacity: 0.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {currentUser?.email}
+            </p>
+          </div>
+          <button
+            onClick={() => signOut()}
+            title="Sair da conta Styx"
+            style={{ background: 'none', border: 'none', padding: '0.25rem', opacity: 0.35, flexShrink: 0 }}
+          >
+            <LogOut size={13} />
+          </button>
+        </div>
+
         {/* Add account button */}
         <motion.button
           className="primary"
@@ -129,23 +305,22 @@ function StyxAppContent() {
           onClick={() => { setShowConnect(true); closeSidebar() }}
           style={{ width: '100%', justifyContent: 'center', gap: '0.5rem' }}
         >
-          <Plus size={16} /> Adicionar Conta
+          <Plus size={16} /> Adicionar Nuvem
         </motion.button>
 
-        {/* Account list grouped by provider */}
+        {/* Account list */}
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           {accounts.length === 0 ? (
             <div style={{ textAlign: 'center', opacity: 0.3, marginTop: '2rem' }}>
               <Cloud size={36} style={{ margin: '0 auto 0.75rem' }} />
-              <p style={{ fontSize: '0.8rem' }}>Nenhuma conta conectada</p>
+              <p style={{ fontSize: '0.8rem' }}>Nenhuma nuvem conectada</p>
             </div>
           ) : (
             Object.entries(grouped).map(([providerId, provAccounts]) => {
-              const cfg = PROVIDER_CONFIG[providerId] || {}
+              const cfg        = PROVIDER_CONFIG[providerId] || {}
               const isExpanded = expandedGroups[providerId] !== false
               return (
                 <div key={providerId}>
-                  {/* Group header */}
                   <button
                     onClick={() => setExpandedGroups(prev => ({ ...prev, [providerId]: !isExpanded }))}
                     style={{ width: '100%', background: 'none', border: 'none', padding: '0.4rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: 0.6 }}
@@ -170,12 +345,10 @@ function StyxAppContent() {
                           className={`account-item ${activeAccountId === acc.id ? 'active' : ''}`}
                           style={{ borderColor: activeAccountId === acc.id ? `${cfg.color}66` : 'transparent' }}
                         >
-                          {/* Avatar or provider badge */}
                           {acc.photo
                             ? <img src={acc.photo} alt="" style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0 }} />
                             : <ProviderBadge providerId={acc.providerId} />
                           }
-
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <p style={{ fontSize: '0.78rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {acc.name}
@@ -185,15 +358,10 @@ function StyxAppContent() {
                             </p>
                             {acc.quota?.total > 0 && (
                               <div style={{ marginTop: '0.35rem' }}>
-                                <StorageBar
-                                  used={acc.quota.used}
-                                  total={acc.quota.total}
-                                  color={cfg.color}
-                                />
+                                <StorageBar used={acc.quota.used} total={acc.quota.total} color={cfg.color} />
                               </div>
                             )}
                           </div>
-
                           <button
                             onClick={e => { e.stopPropagation(); disconnectAccount(acc.id) }}
                             title="Desconectar"
@@ -218,9 +386,8 @@ function StyxAppContent() {
         </button>
       </aside>
 
-      {/* ── Main Content ─────────────────────────────────────────────────────── */}
+      {/* ── Main Content ──────────────────────────────────────────────────────── */}
       <main className="main-content">
-        {/* Header */}
         <header className="app-header" style={{ marginBottom: '1.5rem' }}>
           <div className="app-header-left">
             <div className="mobile-header-spacer" />
@@ -274,7 +441,6 @@ function StyxAppContent() {
           </div>
         </header>
 
-        {/* Home or File Manager */}
         <AnimatePresence mode="wait">
           <motion.div
             key={activeAccountId || 'home'}
@@ -296,7 +462,7 @@ function StyxAppContent() {
         </AnimatePresence>
       </main>
 
-      {/* ── Connect Modal ─────────────────────────────────────────────────────── */}
+      {/* Connect Modal */}
       {showConnect && (
         <ConnectModal
           onClose={() => setShowConnect(false)}
@@ -314,9 +480,65 @@ function StyxAppContent() {
   )
 }
 
-// ── Root (provides GoogleOAuthProvider) ─────────────────────────────────────
+// ── Root ─────────────────────────────────────────────────────────────────────
 
 function App({ clientId }) {
+  const [authState, setAuthState] = useState('loading') // 'loading' | 'unauthenticated' | 'unverified' | 'authenticated'
+  const [currentUser, setCurrentUser] = useState(null)
+
+  useEffect(() => {
+    if (!FIREBASE_CONFIGURED) {
+      setAuthState('unconfigured')
+      return
+    }
+
+    const unsubscribe = onAuthStateChanged(user => {
+      if (!user) {
+        setCurrentUser(null)
+        setAuthState('unauthenticated')
+        CloudManager.setUser(null)
+      } else if (!user.emailVerified) {
+        setCurrentUser(user)
+        setAuthState('unverified')
+        CloudManager.setUser(null)
+      } else {
+        setCurrentUser(user)
+        CloudManager.setUser(user.uid)
+        setAuthState('authenticated')
+      }
+    })
+
+    return unsubscribe
+  }, [])
+
+  // Show loading spinner
+  if (authState === 'loading') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="spin-small" style={{ width: 32, height: 32, margin: '0 auto 1rem', borderWidth: 3 }} />
+          <p style={{ opacity: 0.4, fontSize: '0.85rem' }}>Carregando…</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Firebase not set up
+  if (authState === 'unconfigured') {
+    return <FirebaseSetupBanner />
+  }
+
+  // Not logged in
+  if (authState === 'unauthenticated') {
+    return <AuthScreen />
+  }
+
+  // Logged in but email not verified
+  if (authState === 'unverified') {
+    return <EmailVerifyScreen user={currentUser} />
+  }
+
+  // Fully authenticated
   if (!clientId) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '2rem' }}>
@@ -325,13 +547,6 @@ function App({ clientId }) {
           <p style={{ marginTop: '1rem', color: 'white', opacity: 0.8 }}>
             Variável <b>VITE_GOOGLE_CLIENT_ID</b> não encontrada.
           </p>
-          <ol style={{ marginLeft: '1.2rem', marginTop: '1rem', fontSize: '0.85rem', color: 'white', opacity: 0.7, lineHeight: 1.7 }}>
-            <li>Adicione <code>VITE_GOOGLE_CLIENT_ID</code> no arquivo <code>.env</code></li>
-            <li>Reinicie o servidor de desenvolvimento</li>
-          </ol>
-          <button className="primary" onClick={() => window.location.reload()} style={{ marginTop: '1.5rem', width: '100%', justifyContent: 'center' }}>
-            Recarregar
-          </button>
         </div>
       </div>
     )
@@ -339,7 +554,7 @@ function App({ clientId }) {
 
   return (
     <GoogleOAuthProvider clientId={clientId}>
-      <StyxAppContent />
+      <StyxAppContent currentUser={currentUser} />
     </GoogleOAuthProvider>
   )
 }
