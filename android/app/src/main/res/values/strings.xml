@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Neblina</string>
+    <string name="title_activity_main">Neblina</string>
+    <string name="package_name">com.neblina.cloud</string>
+    <string name="custom_url_scheme">com.neblina.cloud</string>
+</resources>
