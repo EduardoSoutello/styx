@@ -22,14 +22,14 @@ export default function ConnectModal({ onClose, onConnectGoogle, onConnectMega, 
     {
       id: 'onedrive',
       authType: 'oauth',
-      description: !!import.meta.env.VITE_ONEDRIVE_CLIENT_ID ? t('connect.onedrive') : 'Requer VITE_ONEDRIVE_CLIENT_ID',
+      description: t('connect.onedrive'),
       available: !!import.meta.env.VITE_ONEDRIVE_CLIENT_ID,
       inDev: true
     },
     {
       id: 'dropbox',
       authType: 'oauth',
-      description: !!import.meta.env.VITE_DROPBOX_CLIENT_ID ? t('connect.dropbox') : 'Requer VITE_DROPBOX_CLIENT_ID',
+      description: t('connect.dropbox'),
       available: !!import.meta.env.VITE_DROPBOX_CLIENT_ID,
       inDev: true
     }
@@ -171,7 +171,7 @@ export default function ConnectModal({ onClose, onConnectGoogle, onConnectMega, 
                     </div>
                     {!p.available && (
                       <span style={{ fontSize: '0.65rem', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                        <AlertTriangle size={12} /> Config
+                        <AlertTriangle size={12} /> Em breve
                       </span>
                     )}
                     {p.inDev && p.available && (
