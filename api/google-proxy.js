@@ -4,10 +4,10 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
   const { code, client_id, redirect_uri } = req.body;
-  const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET; // Pegando do ambiente SEGURO (Backend)
+  const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || process.env.VITE_GOOGLE_CLIENT_SECRET; // Aceita qualquer um dos dois nomes
 
   if (!CLIENT_SECRET) {
-    return res.status(500).json({ error: 'GOOGLE_CLIENT_SECRET not configured in Vercel' });
+    return res.status(500).json({ error: 'GOOGLE_CLIENT_SECRET (ou VITE_GOOGLE_CLIENT_SECRET) not configured in Vercel' });
   }
 
   try {
