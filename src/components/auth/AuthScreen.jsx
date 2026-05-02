@@ -519,10 +519,10 @@ export default function AuthScreen(props) {
 
         {/* Footer */}
         <div style={{ textAlign: 'center', fontSize: '0.7rem', opacity: 0.5, lineHeight: 1.5 }}>
-          {t('auth.legal', { 
-            terms: <button onClick={onShowLegal} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent-primary)', fontSize: 'inherit', fontWeight: 600, cursor: 'pointer' }}>{t('auth.terms')}</button>,
-            privacy: <button onClick={onShowLegal} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent-primary)', fontSize: 'inherit', fontWeight: 600, cursor: 'pointer' }}>{t('auth.privacy')}</button>
-          })}
+          Ao continuar, você concorda com nossos{' '}
+          <button onClick={onShowLegal} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent-primary)', fontSize: 'inherit', fontWeight: 600, cursor: 'pointer' }}>{t('auth.terms')}</button>
+          {' '}e{' '}
+          <button onClick={onShowLegal} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent-primary)', fontSize: 'inherit', fontWeight: 600, cursor: 'pointer' }}>{t('auth.privacy')}</button>.
         </div>
       </motion.div>
     </div>
