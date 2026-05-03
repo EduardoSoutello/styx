@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutGrid, List, Upload, FolderPlus, ChevronRight,
   Home, Loader2, RefreshCw, Search, CloudOff, X, Download,
-  Trash2, Copy, CheckSquare
+  Trash2, Copy, CheckSquare, MoveRight
 } from 'lucide-react'
 import { CloudManager } from '../services/CloudManager'
 import { useLang } from '../i18n'
@@ -253,6 +253,7 @@ export default function FileManager({
   const [downloadProgress, setDownloadProgress] = useState('')
   const [imagePreview, setImagePreview] = useState(null) // { url, name }
   const [transferFile, setTransferFile] = useState(null) // file object or array to transfer
+  const [transferAction, setTransferAction] = useState('copy') // 'copy' | 'move'
   const [selectedIds,  setSelectedIds]  = useState(new Set())
 
   const account  = CloudManager.accounts.find(a => a.id === accountId)
@@ -343,7 +344,8 @@ export default function FileManager({
     }
   }
 
-  function handleBulkTransfer() {
+  function handleBulkTransfer(action = 'copy') {
+    setTransferAction(action)
     setTransferFile(selectedFiles)
   }
 
@@ -608,7 +610,7 @@ export default function FileManager({
                   onOpen={handleFileOpen}
                   onDelete={handleDelete}
                   onRename={handleRename}
-                  onTransfer={(f) => setTransferFile(f)}
+                  onTransfer={(f, action = 'copy') => { setTransferAction(action); setTransferFile(f) }}
                   onDownload={handleDownload}
                   selected={selectedIds.has(file.id || file.path)}
                   onSelect={toggleSelect}
@@ -643,8 +645,11 @@ export default function FileManager({
               <button className="icon-btn" title={t('fm.selectAll')} onClick={selectAll}>
                 <CheckSquare size={15} />
               </button>
-              <button className="icon-btn" title={t('fm.copySelected')} onClick={handleBulkTransfer}>
+              <button className="icon-btn" title={t('fm.copySelected')} onClick={() => handleBulkTransfer('copy')}>
                 <Copy size={15} />
+              </button>
+              <button className="icon-btn" title="Mover selecionados" onClick={() => handleBulkTransfer('move')}>
+                <MoveRight size={15} />
               </button>
               <button className="icon-btn" title={t('fm.deleteSelected')} onClick={handleBulkDelete} style={{ color: '#ff4444' }}>
                 <Trash2 size={15} />
@@ -666,7 +671,9 @@ export default function FileManager({
           file={Array.isArray(transferFile) ? null : transferFile}
           files={Array.isArray(transferFile) ? transferFile : null}
           sourceAccountId={accountId}
+          action={transferAction}
           onClose={() => { setTransferFile(null); clearSelection() }}
+          onSuccess={() => { loadFiles(currentFolderId); clearSelection() }}
         />
       )}
     </>

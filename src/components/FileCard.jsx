@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import {
   Folder, FileText, FileImage, FileVideo, FileAudio, File,
-  MoreVertical, Download, Trash2, Edit3, Copy
+  MoreVertical, Download, Trash2, Edit3, Copy, MoveRight
 } from 'lucide-react'
 import { useState } from 'react'
 import ProviderBadge from './ProviderBadge'
@@ -113,7 +113,8 @@ export default function FileCard({
             {menuOpen && (
               <div className="file-menu" onClick={e => e.stopPropagation()}>
                 <button onClick={() => { onRename && setRenaming(true); setMenuOpen(false) }}><Edit3 size={12} /> {t('file.rename')}</button>
-                <button onClick={() => { onTransfer?.(file); setMenuOpen(false) }}><Copy size={12} /> {t('file.copyTo')}</button>
+                <button onClick={() => { onTransfer?.(file, 'copy'); setMenuOpen(false) }}><Copy size={12} /> {t('file.copyTo')}</button>
+                <button onClick={() => { onTransfer?.(file, 'move'); setMenuOpen(false) }}><MoveRight size={12} /> Mover para...</button>
                 <button onClick={() => { onDownload?.(file); setMenuOpen(false) }}><Download size={12} /> {t('file.download')}</button>
                 <button onClick={() => { onDelete?.(file); setMenuOpen(false) }} style={{ color: '#ff4444' }}><Trash2 size={12} /> {t('file.delete')}</button>
               </div>
@@ -200,7 +201,8 @@ export default function FileCard({
         {menuOpen && (
           <div className="file-menu" onClick={e => e.stopPropagation()}>
             <button onClick={() => { setRenaming(true); setMenuOpen(false) }}><Edit3 size={12} /> {t('file.rename')}</button>
-            <button onClick={() => { onTransfer?.(file); setMenuOpen(false) }}><Copy size={12} /> {t('file.copyTo')}</button>
+            <button onClick={() => { onTransfer?.(file, 'copy'); setMenuOpen(false) }}><Copy size={12} /> {t('file.copyTo')}</button>
+            <button onClick={() => { onTransfer?.(file, 'move'); setMenuOpen(false) }}><MoveRight size={12} /> Mover para...</button>
             <button onClick={() => { onDownload?.(file); setMenuOpen(false) }}><Download size={12} /> {t('file.download')}</button>
             <button onClick={() => { onDelete?.(file); setMenuOpen(false) }} style={{ color: '#ff4444' }}><Trash2 size={12} /> {t('file.delete')}</button>
           </div>

@@ -5,7 +5,7 @@ import { useLang } from '../i18n'
 import { ChevronRight, Folder, FolderPlus, X, Loader2, UploadCloud, FileText } from 'lucide-react'
 import { PROVIDER_CONFIG } from './ProviderBadge'
 
-export default function TransferModal({ file, files, sourceAccountId, onClose }) {
+export default function TransferModal({ file, files, sourceAccountId, onClose, action = 'copy', onSuccess }) {
   const [targetAccount, setTargetAccount] = useState(null)
   const [folders, setFolders] = useState([])
   const [breadcrumb, setBreadcrumb] = useState([])
@@ -78,6 +78,13 @@ export default function TransferModal({ file, files, sourceAccountId, onClose })
           setProgress(Math.round(pct * 100))
         })
       }
+
+      if (action === 'move') {
+        const itemIds = itemsToTransfer.map(f => f.id || f.path)
+        await CloudManager.deleteFiles(sourceAccountId, itemIds)
+      }
+
+      onSuccess?.()
       onClose() // close on success
     } catch (err) {
       setError(err.message)
@@ -108,7 +115,9 @@ export default function TransferModal({ file, files, sourceAccountId, onClose })
           {/* Header */}
           <div style={{ padding: '1.25rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <h3 style={{ fontSize: '1.1rem', margin: 0 }}>{t('transfer.title')}</h3>
+              <h3 style={{ fontSize: '1.1rem', margin: 0 }}>
+                {action === 'move' ? 'Mover para...' : t('transfer.title')}
+              </h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.3rem' }}>
                 {isBulk && <FileText size={13} style={{ opacity: 0.5 }} />}
                 <p style={{ fontSize: '0.85rem', opacity: 0.5, margin: 0 }}>{displayName}</p>
@@ -123,7 +132,10 @@ export default function TransferModal({ file, files, sourceAccountId, onClose })
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '1rem' }}>
                 <UploadCloud size={48} color="var(--accent-primary)" />
                 <h4 style={{ margin: 0 }}>
-                  {isBulk ? t('transfer.transferringBulk', { n: itemsToTransfer.length, p: itemsToTransfer.length > 1 ? 's' : '' }) : t('transfer.transferring')}
+                  {action === 'move' 
+                    ? (isBulk ? \`Movendo \${itemsToTransfer.length} itens...\` : 'Movendo arquivo...')
+                    : (isBulk ? t('transfer.transferringBulk', { n: itemsToTransfer.length, p: itemsToTransfer.length > 1 ? 's' : '' }) : t('transfer.transferring'))
+                  }
                 </h4>
                 <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
                   <motion.div
@@ -247,7 +259,10 @@ export default function TransferModal({ file, files, sourceAccountId, onClose })
             <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'flex-end', gap: '1rem', background: 'rgba(0,0,0,0.2)' }}>
               <button className="secondary" onClick={onClose} style={{ padding: '0.5rem 1rem' }}>{t('transfer.cancel')}</button>
               <button className="primary" onClick={handleTransfer} disabled={loading} style={{ padding: '0.5rem 1rem' }}>
-                {isBulk ? t('transfer.copyBulk', { n: itemsToTransfer.length }) : t('transfer.copyHere')}
+                {action === 'move'
+                  ? (isBulk ? \`Mover \${itemsToTransfer.length} itens para cá\` : 'Mover para cá')
+                  : (isBulk ? t('transfer.copyBulk', { n: itemsToTransfer.length }) : t('transfer.copyHere'))
+                }
               </button>
             </div>
           )}
