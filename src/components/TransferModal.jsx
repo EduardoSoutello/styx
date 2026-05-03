@@ -133,7 +133,7 @@ export default function TransferModal({ file, files, sourceAccountId, onClose, a
                 <UploadCloud size={48} color="var(--accent-primary)" />
                 <h4 style={{ margin: 0 }}>
                   {action === 'move' 
-                    ? (isBulk ? \`Movendo \${itemsToTransfer.length} itens...\` : 'Movendo arquivo...')
+                    ? (isBulk ? `Movendo ${itemsToTransfer.length} itens...` : 'Movendo arquivo...')
                     : (isBulk ? t('transfer.transferringBulk', { n: itemsToTransfer.length, p: itemsToTransfer.length > 1 ? 's' : '' }) : t('transfer.transferring'))
                   }
                 </h4>
@@ -260,7 +260,7 @@ export default function TransferModal({ file, files, sourceAccountId, onClose, a
               <button className="secondary" onClick={onClose} style={{ padding: '0.5rem 1rem' }}>{t('transfer.cancel')}</button>
               <button className="primary" onClick={handleTransfer} disabled={loading} style={{ padding: '0.5rem 1rem' }}>
                 {action === 'move'
-                  ? (isBulk ? \`Mover \${itemsToTransfer.length} itens para cá\` : 'Mover para cá')
+                  ? (isBulk ? `Mover ${itemsToTransfer.length} itens para cá` : 'Mover para cá')
                   : (isBulk ? t('transfer.copyBulk', { n: itemsToTransfer.length }) : t('transfer.copyHere'))
                 }
               </button>
